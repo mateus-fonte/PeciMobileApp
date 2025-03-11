@@ -11,10 +11,17 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.pecimobileapp.ui.screens.MainScreen
+import com.example.pecimobileapp.ui.screens.GrafanaScreen
 import com.example.pecimobileapp.ui.theme.PeciMobileAppTheme
 import com.example.pecimobileapp.viewmodels.BluetoothViewModel
 
@@ -64,7 +71,23 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PeciMobileAppTheme {
-                MainScreen(bluetoothViewModel)
+                // Crie o NavController
+                val navController = rememberNavController()
+
+                // Defina o NavHost
+                NavHost(
+                    navController = navController,
+                    startDestination = "main_screen", // Tela inicial
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Defina as telas e suas rotas
+                    composable("main_screen") {
+                        MainScreen(navController, bluetoothViewModel) // Passa o navController para a MainScreen
+                    }
+                    composable("grafana_screen") {
+                        GrafanaScreen() // Aqui você pode adicionar o conteúdo do Grafana
+                    }
+                }
             }
         }
 
