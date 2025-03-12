@@ -1,11 +1,8 @@
 package com.example.pecimobileapp.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -14,15 +11,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import com.example.pecimobileapp.ui.dialogs.PairingDialog
 import com.example.pecimobileapp.ui.dialogs.WifiSuccessDialog
 import com.example.pecimobileapp.viewmodels.BluetoothViewModel
+import androidx.navigation.NavController
 
 /**
  * Main screen of the application
  */
 @Composable
-fun MainScreen(viewModel: BluetoothViewModel) {
+fun MainScreen(navController: NavController, viewModel: BluetoothViewModel) {
     val context = LocalContext.current
     val isConnected by viewModel.isConnected.collectAsState()
     val connectionResult by viewModel.connectionResult.collectAsState()
@@ -91,6 +93,11 @@ fun MainScreen(viewModel: BluetoothViewModel) {
                 style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+
+            // Botão para navegar até a tela do Grafana
+            Button(onClick = { navController.navigate("GrafanaScreen") }) {
+                Text("Abrir gráficos")
+            }
 
             if (isConnected) {
                 // If connected to a device, show WiFi credentials screen
