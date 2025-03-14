@@ -15,26 +15,29 @@ import androidx.compose.ui.viewinterop.AndroidView
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun GrafanaScreen() {
-    // Lembre-se do IP dinamicamente
-    val ipAddress = remember { "192.168.1.102" } // 🔹 Substitua pelo IP que deseja usar
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        AndroidView(
-            factory = { context ->
-                WebView(context).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
-                    settings.javaScriptEnabled = true
-                    webViewClient = WebViewClient()
-                    loadUrl("https://$ipAddress:3000") // 🔹 Usando o IP armazenado
+    AndroidView(
+        factory = { context ->
+            WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.allowFileAccess = true
+                settings.allowContentAccess = true
+                webViewClient = object : WebViewClient() {
+                    override fun onReceivedSslError(
+                        view: WebView?,
+                        handler: android.webkit.SslErrorHandler?,
+                        error: android.net.http.SslError?
+                    ) {
+                        handler?.proceed() // Ignorar erro SSL (CUIDADO para produção!)
+                    }
                 }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-    }
+                loadUrl("http://192.168.109.232:3000")
+            }
+        },
+        modifier = Modifier.fillMaxSize()
+    )
 }

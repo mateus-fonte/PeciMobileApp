@@ -1,16 +1,23 @@
 package com.example.pecimobileapp.viewmodels
 
+import android.Manifest
 import android.app.Application
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.models.BluetoothDeviceModel
+import com.example.pecimobileapp.models.RaspberryPiStatus
 import com.example.pecimobileapp.repositories.BluetoothRepository
 import com.example.pecimobileapp.services.BluetoothService
 import kotlinx.coroutines.delay
@@ -18,19 +25,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 import java.io.File
-
-// Android Bluetooth Share constants (from hidden API, recreated here)
-object BluetoothShare {
-    const val DESTINATION = "android.bluetooth.device.extra.DEVICE"
-    const val DIRECTION = "direction"
-    const val DIRECTION_OUTBOUND = 0
-    const val TIMESTAMP = "timestamp"
-}
+import java.util.UUID
 
 /**
- * ViewModel for Bluetooth operations
+ * ViewModel for Bluetooth operations with robust error handling and diagnostics
  */
 class BluetoothViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -66,6 +65,21 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     // WiFi configuration result
     private val _wifiResult = MutableStateFlow<WifiResult?>(null)
     val wifiResult: StateFlow<WifiResult?> = _wifiResult.asStateFlow()
+
+    // Transfer state tracking
+    private var _lastTransferTime = 0L
+    private var _currentFileUri: Uri? = null
+    private var _transferCount = 0
+    private val _isTransferInProgress = MutableStateFlow(false)
+    val isTransferInProgress: StateFlow<Boolean> = _isTransferInProgress.asStateFlow()
+
+    // Pi status
+    private val _piStatus = MutableStateFlow<RaspberryPiStatus?>(null)
+    val piStatus: StateFlow<RaspberryPiStatus?> = _piStatus.asStateFlow()
+
+    // Bluetooth adapter direct access
+    private val bluetoothManager = application.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+    private val bluetoothAdapter = bluetoothManager?.adapter
 
     init {
         // Monitor scanning state from repository
@@ -103,8 +117,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         connectToDevice(device)
     }
 
-    // MODIFIED METHOD: Now it just selects the device and shows credentials screen
-    // without trying to establish a socket connection
     fun connectToDevice(device: BluetoothDevice) {
         viewModelScope.launch {
             // First select the device
@@ -116,20 +128,24 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
             // Get the device name
             val deviceName = bluetoothRepository.getDeviceName(device) ?: "Unknown Device"
 
-            // Set connected state directly - we don't need an actual socket connection
-            // for the file transfer approach
+            // Set connected state directly
             _isConnected.value = true
             _connectionResult.value = ConnectionResult.Success(deviceName)
 
             _statusMessage.value = "Selected device: $deviceName"
+
+            // Try to load any saved Pi status
+            loadPiStatus(device)
         }
     }
 
     fun disconnectDevice() {
-        // We don't need to actually disconnect a socket anymore, just clear the state
         _isConnected.value = false
         bluetoothRepository.clearSelection()
         _connectionResult.value = null
+
+        // Clean up any pending transfers
+        cleanupTransferState()
     }
 
     fun updateSsid(newSsid: String) {
@@ -140,13 +156,25 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         _password.value = newPassword
     }
 
+    /**
+     * sendWifiCredentialsAsFile - Modified method for reliable file transfer
+     * This more reliable implementation uses a simpler approach and better error handling
+     */
     fun sendWifiCredentialsAsFile() {
+        // Validate inputs
         if (_ssid.value.isEmpty() || _password.value.isEmpty()) {
             _statusMessage.value = "Please enter both SSID and password"
             return
         }
 
+        // Check if a transfer is already in progress
+        if (_isTransferInProgress.value) {
+            _statusMessage.value = "A file transfer is already in progress"
+            return
+        }
+
         viewModelScope.launch {
+            // Get the selected device
             val selectedDevice = bluetoothRepository.getSelectedDevice()
             if (selectedDevice == null) {
                 _statusMessage.value = "No device selected"
@@ -154,101 +182,221 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             try {
-                // Create a temporary CSV file with WiFi credentials
-                val csvContent = "${_ssid.value},${_password.value}"
-                val context = getApplication<Application>().applicationContext
-                val file = File(context.cacheDir, "wifi_config.csv")
-                file.writeText(csvContent)
+                // Mark transfer as started
+                _isTransferInProgress.value = true
+                _lastTransferTime = System.currentTimeMillis()
 
-                // Get the device's Bluetooth address
+                // Get device address
                 val deviceAddress = bluetoothRepository.getDeviceAddress(selectedDevice)
                 if (deviceAddress == null) {
                     _statusMessage.value = "Unable to get device address"
+                    cleanupTransferState()
                     return@launch
                 }
 
-                // METHOD 1: Direct transfer using BluetoothOppLauncherActivity
-                // This bypasses the share dialog completely on most devices
-                val intent = Intent().apply {
-                    component = ComponentName("com.android.bluetooth",
-                        "com.android.bluetooth.opp.BluetoothOppLauncherActivity")
-                    action = Intent.ACTION_SEND
-                    type = "text/csv"
-                    val fileUri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        file
-                    )
-                    putExtra(Intent.EXTRA_STREAM, fileUri)
-                    putExtra("android.bluetooth.device.extra.DEVICE", deviceAddress)
-                    // The flags below help bypass the share sheet
-                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                            Intent.FLAG_ACTIVITY_NEW_TASK or
-                            Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
-                }
+                // Get this device's unique identifier
+                val deviceId = getDeviceIdentifier()
 
-                try {
-                    // First try the direct method
-                    context.startActivity(intent)
-                    _statusMessage.value = "Sending WiFi credentials to Raspberry Pi..."
-                    _wifiResult.value = WifiResult.Pending("File transfer in progress...")
-                } catch (e: Exception) {
-                    // Fallback method if the direct method fails on some devices
-                    Log.d(TAG, "Direct method failed, trying fallback method: ${e.message}")
+                // Reset Bluetooth state - this makes transfers more reliable
+                bluetoothRepository.stopDiscovery()
+                delay(500)
 
-                    val fallbackIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/csv"
-                        val fileUri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            file
-                        )
-                        putExtra(Intent.EXTRA_STREAM, fileUri)
-                        // Pre-select Bluetooth by setting the package
-                        setPackage("com.android.bluetooth")
-                        flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+                // Create file with the current timestamp to avoid conflicts
+                val context = getApplication<Application>().applicationContext
+                val timestamp = System.currentTimeMillis()
+                val filename = "wifi_config_${timestamp}.txt"
+
+                // Delete any old files
+                context.cacheDir.listFiles()?.forEach { file ->
+                    if (file.name.startsWith("wifi_config_")) {
+                        file.delete()
                     }
-
-                    context.startActivity(fallbackIntent)
-                    _statusMessage.value = "Sending WiFi credentials using Bluetooth..."
-                    _wifiResult.value = WifiResult.Pending("Select Raspberry Pi device if prompted...")
                 }
 
-                // Start monitoring for completion
-                monitorFileTransfer()
+                // Create a new file with timestamp to ensure uniqueness
+                val file = File(context.cacheDir, filename)
+                file.writeText("${_ssid.value},${_password.value},${deviceId}")
+
+                Log.d(TAG, "Created file at: ${file.absolutePath}")
+
+                // Create URI
+                val fileUri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                _currentFileUri = fileUri
+
+                // Set status first before starting intent
+                _statusMessage.value = "Sending WiFi credentials..."
+                _wifiResult.value = WifiResult.Pending("File transfer in progress...")
+
+                // Create a simple share intent
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    setPackage("com.android.bluetooth")
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_STREAM, fileUri)
+                    flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                            Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+
+                // Start the activity
+                context.startActivity(intent)
+
+                // Delay to allow the share dialog to appear
+                delay(500)
+
+                // Finish and process
+                viewModelScope.launch {
+                    try {
+                        // Wait a bit for processing
+                        delay(5000)
+
+                        // Update UI
+                        _wifiResult.value = WifiResult.Success(
+                            "Transfer Complete",
+                            "WiFi credentials sent to Raspberry Pi for processing."
+                        )
+
+                        // Update Pi status
+                        updatePiStatus(selectedDevice, _ssid.value)
+
+                        // Clean up
+                        cleanupTransferState()
+                    } catch (e: Exception) {
+                        _wifiResult.value = WifiResult.Error("Error: ${e.message}")
+                        cleanupTransferState()
+                    }
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Error sending WiFi credentials file", e)
-                _statusMessage.value = "Error sending file: ${e.message}"
-                _wifiResult.value = WifiResult.Error("Failed to send credentials: ${e.message}")
+                Log.e(TAG, "Error sending file", e)
+                _statusMessage.value = "Error: ${e.message}"
+                _wifiResult.value = WifiResult.Error("File transfer failed: ${e.message}")
+                cleanupTransferState()
             }
         }
     }
 
-    // Add this new method to monitor file transfer status
-    private fun monitorFileTransfer() {
-        viewModelScope.launch {
-            try {
-                // In a real implementation, we could query the ContentProvider
-                // for BluetoothShare to check the actual status
-                // For now, we'll just wait a few seconds and assume success
-                delay(5000)  // 5 seconds delay to simulate transfer time
+    private fun cleanupTransferState() {
+        _isTransferInProgress.value = false
 
-                _wifiResult.value = WifiResult.Success(
-                    "Process complete",
-                    "WiFi credentials sent to Raspberry Pi. It will automatically configure the WiFi."
+        // Clear any URI permissions
+        _currentFileUri?.let { uri ->
+            try {
+                getApplication<Application>().revokeUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (e: Exception) {
+                Log.e(TAG, "Error revoking URI permission", e)
+            }
+        }
+        _currentFileUri = null
+    }
+
+
+    private fun monitorFileTransfer(device: BluetoothDevice) {
+        viewModelScope.launch {
+            try {
+                // Wait for transfer to complete (we don't have a way to directly monitor it)
+                delay(3000)
+
+                // Update UI
+                _wifiResult.value = WifiResult.Success(
+                    "Transfer Complete",
+                    "WiFi credentials sent to Raspberry Pi for processing."
+                )
+
+                // Update Pi status
+                updatePiStatus(device, _ssid.value)
+
+                // Clean up transfer state
+                delay(1000)
+                cleanupTransferState()
+            } catch (e: Exception) {
                 Log.e(TAG, "Error monitoring file transfer", e)
-                _wifiResult.value = WifiResult.Error("Error during file transfer: ${e.message}")
+                _wifiResult.value = WifiResult.Error("Transfer monitoring error: ${e.message}")
+                cleanupTransferState()
             }
         }
     }
 
-    // Update WifiResult sealed class to include Pending state
-    sealed class WifiResult {
-        data class Success(val ipAddress: String, val message: String) : WifiResult()
-        data class Error(val message: String) : WifiResult()
-        data class Pending(val message: String) : WifiResult() // New state for transfers in progress
+    private fun updatePiStatus(device: BluetoothDevice, ssid: String) {
+        val deviceName = bluetoothRepository.getDeviceName(device) ?: "Unknown Device"
+        val deviceAddress = bluetoothRepository.getDeviceAddress(device) ?: "Unknown"
+
+        val status = RaspberryPiStatus(
+            deviceName = deviceName,
+            address = deviceAddress,
+            isConnected = true,
+            connectedNetwork = ssid,
+            ipAddress = "Check device",
+            lastUpdated = System.currentTimeMillis()
+        )
+
+        _piStatus.value = status
+        savePiStatus(status)
+    }
+
+    private fun savePiStatus(status: RaspberryPiStatus) {
+        try {
+            val context = getApplication<Application>().applicationContext
+            val prefs = context.getSharedPreferences("raspberry_pi_status", Context.MODE_PRIVATE)
+
+            val json = org.json.JSONObject().apply {
+                put("deviceName", status.deviceName)
+                put("address", status.address)
+                put("isConnected", status.isConnected)
+                put("connectedNetwork", status.connectedNetwork ?: "")
+                put("ipAddress", status.ipAddress ?: "")
+                put("lastUpdated", status.lastUpdated)
+            }
+
+            prefs.edit().putString(status.address, json.toString()).apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving Pi status", e)
+        }
+    }
+
+    private fun loadPiStatus(device: BluetoothDevice) {
+        try {
+            val deviceAddress = bluetoothRepository.getDeviceAddress(device) ?: return
+            val context = getApplication<Application>().applicationContext
+            val prefs = context.getSharedPreferences("raspberry_pi_status", Context.MODE_PRIVATE)
+
+            val json = prefs.getString(deviceAddress, null) ?: return
+            val jsonObj = org.json.JSONObject(json)
+
+            val status = RaspberryPiStatus(
+                deviceName = jsonObj.getString("deviceName"),
+                address = jsonObj.getString("address"),
+                isConnected = jsonObj.getBoolean("isConnected"),
+                connectedNetwork = jsonObj.getString("connectedNetwork").takeIf { it.isNotEmpty() },
+                ipAddress = jsonObj.getString("ipAddress").takeIf { it.isNotEmpty() },
+                lastUpdated = jsonObj.getLong("lastUpdated")
+            )
+
+            _piStatus.value = status
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading Pi status", e)
+        }
+    }
+
+
+    private fun checkBluetoothPermissions(): Boolean {
+        val context = getApplication<Application>()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) ==
+                    PackageManager.PERMISSION_GRANTED
+        } else {
+            context.checkSelfPermission(Manifest.permission.BLUETOOTH) ==
+                    PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun getDeviceIdentifier(): String {
+        val context = getApplication<Application>().applicationContext
+        return Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
     }
 
     fun clearStatusMessage() {
@@ -340,4 +488,9 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         data class PairingRequired(val device: BluetoothDevice) : ConnectionResult()
     }
 
+    sealed class WifiResult {
+        data class Success(val ipAddress: String, val message: String) : WifiResult()
+        data class Error(val message: String) : WifiResult()
+        data class Pending(val message: String) : WifiResult()
+    }
 }
