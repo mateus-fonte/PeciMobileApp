@@ -95,7 +95,7 @@ fun MainScreen(navController: NavController, viewModel: BluetoothViewModel) {
             )
 
             // Botão para navegar até a tela do Grafana
-            Button(onClick = { navController.navigate("GrafanaScreen") }) {
+            Button(onClick = { navController.navigate("grafana_screen") }) {
                 Text("Abrir gráficos")
             }
 
