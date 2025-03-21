@@ -30,6 +30,17 @@ fun MainScreen(navController: NavController, viewModel: BluetoothViewModel) {
     val connectionResult by viewModel.connectionResult.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val wifiResult by viewModel.wifiResult.collectAsState()
+    // No MainScreen.kt, modifique o bloco LaunchedEffect
+    // Adicione este LaunchedEffect
+    val wifiResultAcknowledged by viewModel.wifiResultAcknowledged.collectAsState()
+
+    LaunchedEffect(wifiResultAcknowledged) {
+        if (wifiResultAcknowledged) {
+            // Quando o resultado for reconhecido, garantir que o diálogo não seja mais exibido
+            // mas manter os dados de status
+            viewModel.clearWifiResult()
+        }
+    }
 
     // Handle status messages
     LaunchedEffect(statusMessage) {
@@ -64,17 +75,34 @@ fun MainScreen(navController: NavController, viewModel: BluetoothViewModel) {
         }
     }
 
-    // Handle WiFi configuration result
+    // No MainScreen.kt, modifique o bloco que trata o wifiResult
+// Handle WiFi configuration result
     wifiResult?.let { result ->
         when (result) {
             is BluetoothViewModel.WifiResult.Success -> {
                 WifiSuccessDialog(
                     ipAddress = result.ipAddress,
                     message = result.message,
-                    onDismiss = { viewModel.clearWifiResult() }
+                    onDismiss = {
+                        // Restaurar a chamada original, mas com a nova abordagem
+                        viewModel.acknowledgeWifiResult()
+                    }
                 )
             }
-            // Error results are shown via status messages
+            is BluetoothViewModel.WifiResult.Error -> {
+                // Diálogo para erros
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { viewModel.acknowledgeWifiResult() },
+                    title = { Text("Erro na Conexão WiFi") },
+                    text = { Text(result.message) },
+                    confirmButton = {
+                        Button(onClick = { viewModel.acknowledgeWifiResult() }) {
+                            Text("OK")
+                        }
+                    }
+                )
+            }
+            // Outras condições (Pending) não precisam de diálogo
             else -> {}
         }
     }

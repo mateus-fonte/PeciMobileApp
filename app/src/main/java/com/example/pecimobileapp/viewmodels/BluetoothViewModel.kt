@@ -19,6 +19,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.models.BluetoothDeviceModel
 import com.example.pecimobileapp.models.RaspberryPiStatus
 import com.example.pecimobileapp.repositories.BluetoothRepository
+import com.example.pecimobileapp.services.BluetoothResponseHandler
 import com.example.pecimobileapp.services.BluetoothService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,7 +36,11 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val bluetoothRepository = BluetoothRepository(application)
     private val bluetoothService = BluetoothService(application)
+    private val bluetoothResponseHandler = BluetoothResponseHandler(application)
 
+    // Adicione esta propriedade ao BluetoothViewModel
+    private val _wifiResultAcknowledged = MutableStateFlow(false)
+    val wifiResultAcknowledged: StateFlow<Boolean> = _wifiResultAcknowledged.asStateFlow()
     // UI State
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
@@ -72,6 +77,10 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     private var _transferCount = 0
     private val _isTransferInProgress = MutableStateFlow(false)
     val isTransferInProgress: StateFlow<Boolean> = _isTransferInProgress.asStateFlow()
+
+    // Estado para verificação de status
+    private val _isCheckingStatus = MutableStateFlow(false)
+    val isCheckingStatus: StateFlow<Boolean> = _isCheckingStatus.asStateFlow()
 
     // Pi status
     private val _piStatus = MutableStateFlow<RaspberryPiStatus?>(null)
@@ -168,8 +177,8 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
 
         // Check if a transfer is already in progress
-        if (_isTransferInProgress.value) {
-            _statusMessage.value = "A file transfer is already in progress"
+        if (_isTransferInProgress.value || _isCheckingStatus.value) {
+            _statusMessage.value = "A transfer is already in progress"
             return
         }
 
@@ -246,24 +255,16 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 // Delay to allow the share dialog to appear
                 delay(500)
 
-                // Finish and process
+                // Agora, em vez de apenas assumir o sucesso, verificamos o status
                 viewModelScope.launch {
                     try {
-                        // Wait a bit for processing
-                        delay(5000)
+                        // Aguarde um tempo para o arquivo ser transferido e processado
+                        delay(2000)
 
-                        // Update UI
-                        _wifiResult.value = WifiResult.Success(
-                            "Transfer Complete",
-                            "WiFi credentials sent to Raspberry Pi for processing."
-                        )
-
-                        // Update Pi status
-                        updatePiStatus(selectedDevice, _ssid.value)
-
-                        // Clean up
-                        cleanupTransferState()
+                        // Verificar o status da conexão no Raspberry Pi
+                        checkConnectionStatus()
                     } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao verificar status de conexão", e)
                         _wifiResult.value = WifiResult.Error("Error: ${e.message}")
                         cleanupTransferState()
                     }
@@ -277,8 +278,93 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * Verifica o status da conexão Wi-Fi no Raspberry Pi após enviar as credenciais
+     */
+    fun checkConnectionStatus() {
+        val selectedDevice = bluetoothRepository.getSelectedDevice()
+
+        if (selectedDevice == null) {
+            _statusMessage.value = "Nenhum dispositivo selecionado"
+            cleanupTransferState()
+            return
+        }
+
+        viewModelScope.launch {
+            _isCheckingStatus.value = true
+            _statusMessage.value = "Verificando status de conexão..."
+
+
+
+            // Define um timeout para evitar espera infinita
+            val timeoutJob = viewModelScope.launch {
+                delay(30000) // 30 segundos de timeout
+                if (_isCheckingStatus.value) {
+                    Log.d(TAG, "Timeout ao verificar status de conexão")
+                    _isCheckingStatus.value = false
+
+                    // Não limpar isTransferInProgress se não tivermos resposta
+                    // Em vez disso, presumir que pode estar funcionando mas não recebemos feedback
+                    _statusMessage.value = "Não foi possível obter o status de conexão. O Raspberry Pi pode estar processando as credenciais ou já estar conectado."
+
+                    // Não definir como erro, apenas como pendente
+                    if (_wifiResult.value !is WifiResult.Success) {
+                        _wifiResult.value = WifiResult.Pending(
+                            "O Raspberry Pi pode estar conectado, mas não foi possível confirmar. Verifique manualmente."
+                        )
+                    }
+
+                    // Não chamar cleanupTransferState() aqui para permitir nova tentativa
+                }
+            }
+
+            try {
+                // Primeiramente, damos tempo para o Raspberry Pi processar as credenciais
+                delay(5000)
+
+                // Tentamos obter o status via Bluetooth ou HTTP
+                val status = bluetoothResponseHandler.getConnectionStatus(selectedDevice)
+
+                if (status != null) {
+                    _piStatus.value = status
+                    savePiStatus(status)
+
+                    if (status.isConnected) {
+                        // Sucesso na conexão
+                        Log.d(TAG, "Conexão bem-sucedida! IP: ${status.ipAddress}")
+                        _wifiResult.value = WifiResult.Success(
+                            status.ipAddress ?: "IP não disponível",
+                            "Raspberry Pi conectado com sucesso à rede ${status.connectedNetwork}"
+                        )
+                    } else {
+                        // Falha na conexão
+                        Log.d(TAG, "Falha na conexão WiFi")
+                        _wifiResult.value = WifiResult.Error(
+                            "Falha ao conectar à rede Wi-Fi. Verifique as credenciais."
+                        )
+                    }
+                } else {
+                    // Não conseguimos obter status
+                    _statusMessage.value = "Não foi possível obter status de conexão. O dispositivo está processando as credenciais."
+
+                    // Como não conseguimos o status, atualizamos o que sabemos
+                    updatePiStatus(selectedDevice, _ssid.value)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao verificar status de conexão", e)
+                _statusMessage.value = "Erro ao verificar status: ${e.message}"
+                _wifiResult.value = WifiResult.Error("Erro ao verificar status: ${e.message}")
+            } finally {
+                timeoutJob.cancel() // Cancela o timeout se a operação completou normalmente
+                _isCheckingStatus.value = false
+                _isTransferInProgress.value = false
+                cleanupTransferState()
+            }
+        }
+    }
+
     private fun cleanupTransferState() {
-        _isTransferInProgress.value = false
+        _isTransferInProgress.value = false  // Redefine claramente o estado para false
 
         // Clear any URI permissions
         _currentFileUri?.let { uri ->
@@ -293,7 +379,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
         _currentFileUri = null
     }
-
 
     private fun monitorFileTransfer(device: BluetoothDevice) {
         viewModelScope.launch {
@@ -358,6 +443,48 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // Adicione esta função ao BluetoothViewModel.kt
+    /**
+     * Reconhece que o usuário viu o resultado da conexão WiFi
+     * Fecha o diálogo mas mantém as informações de status
+     */
+    fun acknowledgeWifiResult() {
+        // Marca o resultado como "reconhecido" para fechar o diálogo
+        // mas mantém os dados de status para exibição na tela
+
+        // Esta variável substitui a antiga clearWifiResult()
+        // Em vez de definir como null, apenas define uma flag
+        _wifiResultAcknowledged.value = true
+
+        // Reset no próximo ciclo de UI
+        viewModelScope.launch {
+            delay(100)
+            _wifiResultAcknowledged.value = false
+        }
+
+        // Atualiza o estado do diálogo para não ser exibido
+        // mas sem perder as informações de status
+        val currentResult = _wifiResult.value
+        if (currentResult is WifiResult.Success) {
+            // Armazenar os dados de sucesso para uso na interface
+            val successResult = currentResult
+
+            // Limpar o resultado para fechar o diálogo
+            _wifiResult.value = null
+
+            // Atualizar o status do Pi para manter as informações visíveis na tela
+            _piStatus.value?.let { status ->
+                _piStatus.value = status.copy(
+                    isConnected = true,
+                    ipAddress = successResult.ipAddress
+                )
+            }
+        } else {
+            // Para outros tipos de resultado, apenas limpar
+            _wifiResult.value = null
+        }
+    }
+
     private fun loadPiStatus(device: BluetoothDevice) {
         try {
             val deviceAddress = bluetoothRepository.getDeviceAddress(device) ?: return
@@ -381,7 +508,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
             Log.e(TAG, "Error loading Pi status", e)
         }
     }
-
 
     private fun checkBluetoothPermissions(): Boolean {
         val context = getApplication<Application>()
@@ -407,8 +533,13 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         _connectionResult.value = null
     }
 
+    // Substitua essa função no BluetoothViewModel.kt
     fun clearWifiResult() {
-        _wifiResult.value = null
+        // Não limpa o resultado se for Success, apenas se for Erro ou Pending
+        val currentResult = _wifiResult.value
+        if (currentResult !is WifiResult.Success) {
+            _wifiResult.value = null
+        }
     }
 
     fun updatePairedDevices() {
