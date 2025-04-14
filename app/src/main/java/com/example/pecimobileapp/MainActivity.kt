@@ -11,16 +11,10 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import com.example.pecimobileapp.ui.screens.MainScreen
-import com.example.pecimobileapp.ui.screens.GrafanaScreen
+import com.example.pecimobileapp.ui.navigation.AppNavigation
 import com.example.pecimobileapp.ui.theme.PeciMobileAppTheme
 import com.example.pecimobileapp.viewmodels.BluetoothViewModel
 
@@ -37,13 +31,13 @@ class MainActivity : ComponentActivity() {
     ) { permissions ->
         val allGranted = permissions.entries.all { it.value }
         if (allGranted) {
-            // All necessary permissions granted, check if Bluetooth is enabled
+            // Todas as permissões concedidas: verifique se o Bluetooth está habilitado
             ensureBluetoothIsEnabled()
         } else {
-            // Some permissions were denied
+            // Algumas permissões foram negadas
             Toast.makeText(
                 this,
-                "Bluetooth permissions are required for this app to function properly",
+                "As permissões de Bluetooth são necessárias para o funcionamento do app",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -53,13 +47,13 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
-            // Bluetooth was enabled by the user
+            // Usuário habilitou o Bluetooth
             bluetoothViewModel.updatePairedDevices()
         } else {
-            // User refused to enable Bluetooth
+            // Usuário não habilitou o Bluetooth
             Toast.makeText(
                 this,
-                "Bluetooth is required for this app to function properly",
+                "Bluetooth é obrigatório para o funcionamento do app",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -70,43 +64,26 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PeciMobileAppTheme {
-                // Crie o NavController
-                val navController = rememberNavController()
-
-                // Defina o NavHost
-                NavHost(
-                    navController = navController,
-                    startDestination = "main_screen", // Tela inicial
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    // Defina as telas e suas rotas
-                    composable("main_screen") {
-                        MainScreen(navController, bluetoothViewModel) // Passa o navController para a MainScreen
-                    }
-                    composable("grafana_screen") {
-                        GrafanaScreen() // Aqui você pode adicionar o conteúdo do Grafana
-                    }
-                }
+                // Em vez de chamar MainScreen diretamente, utilizamos o grafo de navegação:
+                AppNavigation(viewModel = bluetoothViewModel)
             }
         }
 
-        // Check if Bluetooth is available
+        // Verifica se o dispositivo tem suporte ao Bluetooth
         if (bluetoothAdapter == null) {
-            // Device doesn't support Bluetooth
-            Toast.makeText(this, "Bluetooth is not available on this device", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Bluetooth não está disponível neste dispositivo", Toast.LENGTH_LONG).show()
             return
         }
 
-        // Check and request Bluetooth permissions
+        // Verifica e solicita as permissões de Bluetooth
         checkBluetoothPermissions()
     }
 
     private fun checkBluetoothPermissions() {
         val permissionsToRequest = mutableListOf<String>()
 
-        // Check necessary permissions based on Android version
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Android 12+ requires BLUETOOTH_SCAN and BLUETOOTH_CONNECT
+            // Android 12+ precisa das permissões BLUETOOTH_SCAN e BLUETOOTH_CONNECT
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.BLUETOOTH_SCAN)
             }
@@ -114,7 +91,7 @@ class MainActivity : ComponentActivity() {
                 permissionsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
             }
         } else {
-            // Older versions need BLUETOOTH_ADMIN and location permissions
+            // Versões mais antigas: BLUETOOTH_ADMIN e permissões de localização
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.BLUETOOTH_ADMIN)
             }
@@ -123,11 +100,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Request permissions if needed
         if (permissionsToRequest.isNotEmpty()) {
             requestBluetoothPermissionLauncher.launch(permissionsToRequest.toTypedArray())
         } else {
-            // Permissions already granted, check if Bluetooth is enabled
             ensureBluetoothIsEnabled()
         }
     }
@@ -137,7 +112,6 @@ class MainActivity : ComponentActivity() {
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             enableBluetoothLauncher.launch(enableBtIntent)
         } else {
-            // Bluetooth is already enabled, update paired devices
             bluetoothViewModel.updatePairedDevices()
         }
     }
