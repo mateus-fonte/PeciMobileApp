@@ -6,8 +6,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -18,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.pecimobileapp.models.BluetoothDeviceModel
@@ -146,43 +150,49 @@ fun ScanControls(
     onStopScan: () -> Unit,
     onAutoDetect: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
                 onClick = {
-                    if (isScanning) {
-                        onStopScan()
-                    } else {
-                        onStartScan()
-                    }
+                    if (isScanning) onStopScan() else onStartScan()
                 },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    // Um tom levemente transparente para se destacar no fundo escuro do gradiente
+                    containerColor = Color.White.copy(alpha = 0.25f)
+                )
             ) {
-                Text(if (isScanning) "Stop Scan" else "Scan for Devices")
+                Text(
+                    text = if (isScanning) "Stop Scan" else "Scan for Devices",
+                    style = MaterialTheme.typography.bodyLarge.copy(color = Color.White)
+                )
             }
-
             if (isScanning) {
+                Spacer(modifier = Modifier.width(16.dp))
                 CircularProgressIndicator(
-                    modifier = Modifier.padding(start = 16.dp)
+                    modifier = Modifier.size(24.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
                 )
             }
         }
-
         Spacer(modifier = Modifier.height(8.dp))
-
         Button(
             onClick = onAutoDetect,
             modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.secondary
             )
         ) {
-            Text("Auto-Detect Device")
+            Text(
+                text = "Auto-Detect Device",
+                style = MaterialTheme.typography.bodyLarge.copy(color = Color.White)
+            )
         }
     }
 }
