@@ -59,13 +59,6 @@ fun MainScreen(realTimeModel: RealTimeViewModel) {
                     color = Color.White,
                     modifier = Modifier.weight(1f)
                 )
-                // Exemplo: Ícone de bicicleta (certifique-se de ter o recurso R.drawable.ic_bike)
-                //Image(
-                //    painter = painterResource(id = R.drawable.ic_bike),
-                //    contentDescription = "Bicicleta",
-                //    contentScale = ContentScale.Fit,
-                //    modifier = Modifier.size(64.dp)
-                //)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
