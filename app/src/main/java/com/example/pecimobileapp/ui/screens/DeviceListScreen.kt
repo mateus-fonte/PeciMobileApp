@@ -162,8 +162,7 @@ fun ScanControls(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(
-                    // Um tom levemente transparente para se destacar no fundo escuro do gradiente
-                    containerColor = Color.White.copy(alpha = 0.25f)
+                    containerColor = MaterialTheme.colorScheme.primary  // Cor sólida, bem visível
                 )
             ) {
                 Text(
@@ -175,7 +174,7 @@ fun ScanControls(
                 Spacer(modifier = Modifier.width(16.dp))
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 2.dp
                 )
             }
@@ -186,7 +185,7 @@ fun ScanControls(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.secondary
+                containerColor = MaterialTheme.colorScheme.secondary  // Cor destacada para auto-detect
             )
         ) {
             Text(
