@@ -28,14 +28,6 @@ fun ProfileScreen() {
         color = MaterialTheme.colorScheme.background
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            TopAppBar(
-                title = {
-                    Text(text = "Perfil", color = MaterialTheme.colorScheme.onPrimary)
-                },
-                colors = TopAppBarDefaults.mediumTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            )
             Column(
                 modifier = Modifier
                     .fillMaxSize()
