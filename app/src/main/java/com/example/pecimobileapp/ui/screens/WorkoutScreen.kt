@@ -1,7 +1,5 @@
 package com.example.pecimobileapp.ui.screens
 
-
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -20,9 +18,6 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
 
-
-
-// Zonas de treino
 val AerobicEndurance = Color(0xFF2196F3)
 val AerobicPower = Color(0xFF4CAF50)
 val Threshold = Color(0xFFFFEB3B)
@@ -42,14 +37,11 @@ val zoneColors = mapOf(
 @Composable
 fun WorkoutScreen(
     navController: NavController,
-    mode: String, // "aula" ou "individual"
-    nickname: String?,
     selectedZone: Int,
+    nickname: String,
     heartRate: Int?,
     temperature: Float?,
-    execution: Float?, // % do tempo na zona correta
-    position: Int = 1,
-    top3: List<Pair<String, Int>> = emptyList(),
+    execution: Float?,
     onStop: () -> Unit
 ) {
     val zoneColor = zoneColors[selectedZone] ?: NoZone
@@ -73,7 +65,7 @@ fun WorkoutScreen(
         color = MaterialTheme.colorScheme.background
     ) {
         Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-            // Top bar
+            // Controles superiores
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -95,7 +87,7 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Tipo de treino e zona
+            // Zona atual
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -108,7 +100,7 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Temperatura e BPM
+            // Temperatura e FC
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("🌡️")
@@ -146,46 +138,18 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // TOP 3 ou posição individual
+            // Indicador pessoal
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-                Text("TOP 3", fontWeight = FontWeight.Bold)
-                if (mode == "aula") {
-                    top3.take(3).forEachIndexed { index, (name, pos) ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(name)
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .background(zoneColor, shape = CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("${index + 1}")
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(nickname ?: "YOU")
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(zoneColor, shape = CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("$position")
-                        }
-                    }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("YOU")
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(zoneColor, shape = CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("1")
-                        }
+                Text("DESEMPENHO", fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("VOCÊ")
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(zoneColor, shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("✓")
                     }
                 }
             }
