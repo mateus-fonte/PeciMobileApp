@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +24,7 @@ class BleManager(private val context: Context) {
     private val TIME_UUID      = UUID.fromString("ca68ebcd-a0e5-4174-896d-15ba005b668e")
     private val MODE_UUID      = UUID.fromString("0b5a208c-b1df-4d3d-b188-6a50268ac8c8")
     private val ID_UUID        = UUID.fromString("eee66a40-0189-4dff-9310-b5736f86ee9c")
+
     private val HR_SERVICE_UUID= UUID.fromString("0000180D-0000-1000-8000-00805f9b34fb")
     private val HR_CHAR_UUID   = UUID.fromString("00002A37-0000-1000-8000-00805f9b34fb")
     private val CLIENT_CFG_UUID= UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
@@ -32,6 +34,9 @@ class BleManager(private val context: Context) {
     // — Scan results flow —
     private val _scanResults = MutableStateFlow<List<ScanResult>>(emptyList())
     val scanResults: StateFlow<List<ScanResult>> = _scanResults
+
+    private val _connected = MutableStateFlow(false)
+    val isConnected: StateFlow<Boolean> = _connected
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -92,10 +97,13 @@ class BleManager(private val context: Context) {
                 gatt: BluetoothGatt, status: Int, newState: Int
             ) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    _connected.value = true
                     Handler(Looper.getMainLooper()).post {
                         Toast.makeText(context, "Conectado ao BLE", Toast.LENGTH_SHORT).show()
                     }
                     gatt.discoverServices()
+                }else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    _connected.value = false
                 }
             }
 
@@ -112,7 +120,8 @@ class BleManager(private val context: Context) {
             }
 
             override fun onCharacteristicChanged(
-                gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic
+                gatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic
             ) {
                 if (characteristic.uuid == HR_CHAR_UUID) {
                     val flag = characteristic.properties
@@ -121,6 +130,7 @@ class BleManager(private val context: Context) {
                     else
                         BluetoothGattCharacteristic.FORMAT_UINT8
                     val hr = characteristic.getIntValue(format, 1)
+                    Log.d("BleManager","onCharacteristicChanged: $hr")
                     _heartRate.value = hr
                 }
             }
@@ -130,6 +140,7 @@ class BleManager(private val context: Context) {
                 characteristic: BluetoothGattCharacteristic,
                 status: Int
             ) {
+                super.onCharacteristicWrite(gatt, characteristic, status)
                 Handler(Looper.getMainLooper()).post {
                     if (status == BluetoothGatt.GATT_SUCCESS) {
                         _configSent.value = true
