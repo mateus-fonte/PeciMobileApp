@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import com.example.pecimobileapp.viewmodels.BluetoothViewModel
 
 @Composable
-fun AppNavigation(viewModel: BluetoothViewModel) {
-    // Usa o BottomNavScaffold que já contém todo o shell de navegação
-    BottomNavScaffold(viewModel = viewModel)
+fun AppNavigation(bluetoothViewModel: BluetoothViewModel) {
+    // Usa o BottomNavScaffold que já contém toda a navegação de abas
+    BottomNavScaffold()
 }

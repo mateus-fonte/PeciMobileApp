@@ -2,10 +2,8 @@ package com.example.pecimobileapp.viewmodels
 
 import android.Manifest
 import android.app.Application
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -16,61 +14,59 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.pecimobileapp.ble.BleManager
 import com.example.pecimobileapp.models.BluetoothDeviceModel
 import com.example.pecimobileapp.models.RaspberryPiStatus
 import com.example.pecimobileapp.repositories.BluetoothRepository
 import com.example.pecimobileapp.services.BluetoothResponseHandler
 import com.example.pecimobileapp.services.BluetoothService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.UUID
-
+import android.bluetooth.le.ScanResult
 /**
  * ViewModel for Bluetooth operations with robust error handling and diagnostics
  */
 class BluetoothViewModel(application: Application) : AndroidViewModel(application) {
 
+    // Crie ou injete uma instância do seu BleManager
+    private val bleManager = BleManager(application)
     private val bluetoothRepository = BluetoothRepository(application)
     private val bluetoothService = BluetoothService(application)
     private val bluetoothResponseHandler = BluetoothResponseHandler(application)
-
+    val bleScanResults: StateFlow<List<ScanResult>> = bleManager.scanResults
+    private val _isBleConnected = MutableStateFlow(false)
+    val isBleConnected: StateFlow<Boolean> = _isBleConnected
     // Adicione esta propriedade ao BluetoothViewModel
     private val _wifiResultAcknowledged = MutableStateFlow(false)
     val wifiResultAcknowledged: StateFlow<Boolean> = _wifiResultAcknowledged.asStateFlow()
     // UI State
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
-
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
-
     // Accessible state flows from repository
     val pairedDevices = bluetoothRepository.pairedDevices
     val discoveredDevices = bluetoothRepository.discoveredDevices
-
     // WiFi credentials
     private val _ssid = MutableStateFlow("")
     val ssid: StateFlow<String> = _ssid.asStateFlow()
-
     private val _password = MutableStateFlow("")
     val password: StateFlow<String> = _password.asStateFlow()
-
     // Status messages
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
-
     // Connection result
     private val _connectionResult = MutableStateFlow<ConnectionResult?>(null)
     val connectionResult: StateFlow<ConnectionResult?> = _connectionResult.asStateFlow()
-
     // WiFi configuration result
     private val _wifiResult = MutableStateFlow<WifiResult?>(null)
     val wifiResult: StateFlow<WifiResult?> = _wifiResult.asStateFlow()
-
     // Transfer state tracking
     private var _lastTransferTime = 0L
     private var _currentFileUri: Uri? = null
@@ -82,13 +78,31 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isCheckingStatus = MutableStateFlow(false)
     val isCheckingStatus: StateFlow<Boolean> = _isCheckingStatus.asStateFlow()
 
-    // Pi status
-    private val _piStatus = MutableStateFlow<RaspberryPiStatus?>(null)
-    val piStatus: StateFlow<RaspberryPiStatus?> = _piStatus.asStateFlow()
 
     // Bluetooth adapter direct access
     private val bluetoothManager = application.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
     private val bluetoothAdapter = bluetoothManager?.adapter
+
+    fun startBleScanForEsp32() {
+        // Isso chama a função extraída do código ESP32 para iniciar o scan
+        CoroutineScope(Dispatchers.IO).launch {
+            bleManager.startBleScan()
+        }
+    }
+
+    fun startBleScan() = viewModelScope.launch(Dispatchers.IO) {
+        bleManager.startBleScan()
+    }
+
+    fun connectBleToDevice(device: BluetoothDevice) {
+        viewModelScope.launch(Dispatchers.IO) {
+            bleManager.connectToDevice(device)
+            // depois disso você pode atualizar _isBleConnected = true
+            _isBleConnected.value = true
+        }
+    }
+
+
 
     init {
         // Monitor scanning state from repository
@@ -143,8 +157,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
 
             _statusMessage.value = "Selected device: $deviceName"
 
-            // Try to load any saved Pi status
-            loadPiStatus(device)
         }
     }
 
@@ -294,8 +306,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
             _isCheckingStatus.value = true
             _statusMessage.value = "Verificando status de conexão..."
 
-
-
             // Define um timeout para evitar espera infinita
             val timeoutJob = viewModelScope.launch {
                 delay(30000) // 30 segundos de timeout
@@ -326,8 +336,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 val status = bluetoothResponseHandler.getConnectionStatus(selectedDevice)
 
                 if (status != null) {
-                    _piStatus.value = status
-                    savePiStatus(status)
 
                     if (status.isConnected) {
                         // Sucesso na conexão
@@ -347,8 +355,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                     // Não conseguimos obter status
                     _statusMessage.value = "Não foi possível obter status de conexão. O dispositivo está processando as credenciais."
 
-                    // Como não conseguimos o status, atualizamos o que sabemos
-                    updatePiStatus(selectedDevice, _ssid.value)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao verificar status de conexão", e)
@@ -392,9 +398,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                     "WiFi credentials sent to Raspberry Pi for processing."
                 )
 
-                // Update Pi status
-                updatePiStatus(device, _ssid.value)
-
                 // Clean up transfer state
                 delay(1000)
                 cleanupTransferState()
@@ -403,43 +406,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
                 _wifiResult.value = WifiResult.Error("Transfer monitoring error: ${e.message}")
                 cleanupTransferState()
             }
-        }
-    }
-
-    private fun updatePiStatus(device: BluetoothDevice, ssid: String) {
-        val deviceName = bluetoothRepository.getDeviceName(device) ?: "Unknown Device"
-        val deviceAddress = bluetoothRepository.getDeviceAddress(device) ?: "Unknown"
-
-        val status = RaspberryPiStatus(
-            deviceName = deviceName,
-            address = deviceAddress,
-            isConnected = true,
-            connectedNetwork = ssid,
-            ipAddress = "Check device",
-            lastUpdated = System.currentTimeMillis()
-        )
-
-        _piStatus.value = status
-        savePiStatus(status)
-    }
-
-    private fun savePiStatus(status: RaspberryPiStatus) {
-        try {
-            val context = getApplication<Application>().applicationContext
-            val prefs = context.getSharedPreferences("raspberry_pi_status", Context.MODE_PRIVATE)
-
-            val json = org.json.JSONObject().apply {
-                put("deviceName", status.deviceName)
-                put("address", status.address)
-                put("isConnected", status.isConnected)
-                put("connectedNetwork", status.connectedNetwork ?: "")
-                put("ipAddress", status.ipAddress ?: "")
-                put("lastUpdated", status.lastUpdated)
-            }
-
-            prefs.edit().putString(status.address, json.toString()).apply()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving Pi status", e)
         }
     }
 
@@ -472,40 +438,9 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
             // Limpar o resultado para fechar o diálogo
             _wifiResult.value = null
 
-            // Atualizar o status do Pi para manter as informações visíveis na tela
-            _piStatus.value?.let { status ->
-                _piStatus.value = status.copy(
-                    isConnected = true,
-                    ipAddress = successResult.ipAddress
-                )
-            }
         } else {
             // Para outros tipos de resultado, apenas limpar
             _wifiResult.value = null
-        }
-    }
-
-    private fun loadPiStatus(device: BluetoothDevice) {
-        try {
-            val deviceAddress = bluetoothRepository.getDeviceAddress(device) ?: return
-            val context = getApplication<Application>().applicationContext
-            val prefs = context.getSharedPreferences("raspberry_pi_status", Context.MODE_PRIVATE)
-
-            val json = prefs.getString(deviceAddress, null) ?: return
-            val jsonObj = org.json.JSONObject(json)
-
-            val status = RaspberryPiStatus(
-                deviceName = jsonObj.getString("deviceName"),
-                address = jsonObj.getString("address"),
-                isConnected = jsonObj.getBoolean("isConnected"),
-                connectedNetwork = jsonObj.getString("connectedNetwork").takeIf { it.isNotEmpty() },
-                ipAddress = jsonObj.getString("ipAddress").takeIf { it.isNotEmpty() },
-                lastUpdated = jsonObj.getLong("lastUpdated")
-            )
-
-            _piStatus.value = status
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading Pi status", e)
         }
     }
 
@@ -550,59 +485,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         return bluetoothRepository.getDeviceName(device)
     }
 
-    fun autoDetectRaspberryPi() {
-        viewModelScope.launch {
-            // First check if we have any paired Raspberry Pi devices
-            val pairedPiDevices = pairedDevices.value.filter { isRaspberryPiDevice(it.name) }
-
-            if (pairedPiDevices.isNotEmpty()) {
-                // Connect to the first paired Raspberry Pi device
-                pairedPiDevices.first().device.let { device ->
-                    connectToDevice(device)
-                    return@launch
-                }
-            }
-
-            // If no paired Raspberry Pi devices, start scanning
-            startScan()
-
-            // Give it some time to discover devices
-            delay(10000) // 10 seconds
-
-            // Stop scanning
-            stopScan()
-
-            // Check if we found any Raspberry Pi devices
-            val discoveredPiDevices = discoveredDevices.value.filter { isRaspberryPiDevice(it.name) }
-
-            if (discoveredPiDevices.isNotEmpty()) {
-                // Select the first discovered Raspberry Pi device
-                val device = discoveredPiDevices.first().device
-
-                // If it's not paired, we need to pair first
-                if (!discoveredPiDevices.first().isPaired) {
-                    // Emit a message indicating that a pairing attempt is needed
-                    _connectionResult.value = ConnectionResult.PairingRequired(device)
-                } else {
-                    // It's already paired, connect to it
-                    connectToDevice(device)
-                }
-            } else {
-                _statusMessage.value = "No Raspberry Pi devices found"
-            }
-        }
-    }
-
-    private fun isRaspberryPiDevice(name: String?): Boolean {
-        if (name == null) return false
-
-        val lowerName = name.lowercase()
-        return lowerName.startsWith("raspberrypi") ||
-                lowerName.startsWith("raspberry pi") ||
-                lowerName.startsWith("raspberry-pi") ||
-                lowerName.startsWith("raspberry_pi") ||
-                (lowerName.contains("raspberry") && lowerName.contains("pi"))
-    }
 
     override fun onCleared() {
         super.onCleared()
