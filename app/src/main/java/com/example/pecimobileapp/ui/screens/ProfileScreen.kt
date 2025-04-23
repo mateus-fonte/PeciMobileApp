@@ -1,99 +1,84 @@
 package com.example.pecimobileapp.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.pecimobileapp.ui.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun ProfileScreen() {
+    val viewModel: ProfileViewModel = viewModel()
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.Top,
-                horizontalAlignment = Alignment.Start
-            ) {
-                // Exibe o nome
-                Text(
-                    text = "Maria",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                // Card com medidas: idade, peso, e altura
-                Card(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Medidas",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Idade: 32 anos",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = "Peso: 62 kg",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = "Altura: 1,68 m",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-                // Seção de Atividades Recentes
-                Text(
-                    text = "Atividades Recentes",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Passeio de bicicleta no Parque Ibirapuera - 25 km",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Sessão: 1h 15min",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Perfil", style = MaterialTheme.typography.headlineMedium)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = viewModel.nome,
+                onValueChange = { viewModel.nome = it },
+                label = { Text("Nome") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = viewModel.apelido,
+                onValueChange = { viewModel.apelido = it },
+                label = { Text("Apelido") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = viewModel.peso.toString(),
+                onValueChange = {
+                    val peso = it.toFloatOrNull()
+                    if (peso != null) viewModel.peso = peso
+                },
+                label = { Text("Peso (kg)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = viewModel.anoNascimento.toString(),
+                onValueChange = {
+                    val ano = it.toIntOrNull()
+                    if (ano != null) viewModel.anoNascimento = ano
+                },
+                label = { Text("Ano de Nascimento") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = viewModel.fcMaxManual?.toString() ?: "",
+                onValueChange = {
+                    viewModel.fcMaxManual = it.toIntOrNull()
+                },
+                label = { Text("FC Máxima (opcional)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text("Idade: ${viewModel.idade} anos", style = MaterialTheme.typography.bodyLarge)
+            Text("FC Máxima: ${viewModel.fcMax} bpm", style = MaterialTheme.typography.bodyLarge)
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Zonas:", style = MaterialTheme.typography.titleMedium)
+            viewModel.zonas.forEach { (nome, faixa) ->
+                Text("$nome: ${faixa.first} - ${faixa.last} bpm", style = MaterialTheme.typography.bodyLarge)
             }
         }
     }
