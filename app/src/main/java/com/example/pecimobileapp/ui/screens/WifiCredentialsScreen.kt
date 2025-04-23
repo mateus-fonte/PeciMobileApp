@@ -39,7 +39,6 @@ fun WifiCredentialsScreen(viewModel: BluetoothViewModel, deviceName: String) {
     val password by viewModel.password.collectAsState()
     val isTransferInProgress by viewModel.isTransferInProgress.collectAsState()
     val isCheckingStatus by viewModel.isCheckingStatus.collectAsState()
-    val piStatus by viewModel.piStatus.collectAsState()
     val wifiResult by viewModel.wifiResult.collectAsState()
 
     Card(
@@ -189,12 +188,6 @@ fun WifiCredentialsScreen(viewModel: BluetoothViewModel, deviceName: String) {
                                 text = "IP: ${(wifiResult as BluetoothViewModel.WifiResult.Success).ipAddress}",
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            if (piStatus?.connectedNetwork != null) {
-                                Text(
-                                    text = "Rede: ${piStatus?.connectedNetwork}",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
                         }
                         wifiResult is BluetoothViewModel.WifiResult.Error -> {
                             Text(
@@ -208,37 +201,6 @@ fun WifiCredentialsScreen(viewModel: BluetoothViewModel, deviceName: String) {
                                 text = (wifiResult as BluetoothViewModel.WifiResult.Error).message,
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                        }
-                        piStatus != null -> {
-                            if (piStatus?.isConnected == true) {
-                                Text(
-                                    text = "Raspberry Pi conectado",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (piStatus?.ipAddress != null) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "IP: ${piStatus?.ipAddress}",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                if (piStatus?.connectedNetwork != null) {
-                                    Text(
-                                        text = "Rede: ${piStatus?.connectedNetwork}",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = "Aguardando envio de credenciais",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
                         }
                         else -> {
                             Text(

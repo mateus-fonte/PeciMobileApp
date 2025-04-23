@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             PeciMobileAppTheme {
                 // Em vez de chamar MainScreen diretamente, utilizamos o grafo de navegação:
-                AppNavigation(viewModel = bluetoothViewModel)
+                AppNavigation(bluetoothViewModel)
             }
         }
 

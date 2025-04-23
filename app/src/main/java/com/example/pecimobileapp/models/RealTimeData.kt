@@ -4,5 +4,5 @@ data class RealTimeData(
     val timestamp: Long,
     val value: Float,
     val averageTemperature: Float,
-    val heartRate: Float
+    val heartRate: Int?
 )

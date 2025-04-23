@@ -1,34 +1,29 @@
+// MainScreen.kt
 package com.example.pecimobileapp.ui.screens
 
-import androidx.compose.foundation.Image
+import android.annotation.SuppressLint
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.pecimobileapp.R
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 @Composable
-fun MainScreen(realTimeModel: RealTimeViewModel) {
-    // Coleta os dados dos sensores do RealTimeModel.
+fun MainScreen(
+    realTimeModel: RealTimeViewModel
+) {
+    // ➊ coleta os dados do BLE/ESP32
     val sensorData by realTimeModel.realTimeData.collectAsState()
     val isConnected by realTimeModel.isConnected.collectAsState()
 
-    // Cria um fundo com um gradiente vertical.
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -48,76 +43,71 @@ fun MainScreen(realTimeModel: RealTimeViewModel) {
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Cabeçalho com saudação e imagem (opcional)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Bom treino, Ciclista!",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            Text(
+                text = "Bom treino, Ciclista!",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             if (isConnected) {
-                // Se os sensores estiverem conectados, exibe cards com métricas
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(8.dp)
-                            .clip(RoundedCornerShape(16.dp)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(text = "Frequência Cardíaca", style = MaterialTheme.typography.bodyMedium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "${sensorData?.heartRate} BPM",
-                                style = MaterialTheme.typography.headlineSmall
-                            )
-                        }
-                    }
-                    Card(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(8.dp)
-                            .clip(RoundedCornerShape(16.dp)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(text = "Temperatura Média", style = MaterialTheme.typography.bodyMedium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "${sensorData?.let { "%.1f".format(it.averageTemperature) }} °C",
-                                style = MaterialTheme.typography.headlineSmall
-                            )
-                        }
-                    }
-                }
-            } else {
-                // Se não estiver conectado, exibe uma mensagem convidando ao setup
+                // ➋ exibe a frequência cardíaca
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(16.dp)),
+                        .padding(8.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Frequência Cardíaca", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = sensorData?.heartRate?.let { "$it BPM" } ?: "-- BPM",
+                            style = MaterialTheme.typography.headlineLarge
+                        )
+                    }
+                }
+                /**
+                // ➌ exibe a temperatura média (se tiver)
+                sensorData?.averageTemperature?.let { temp ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("Temperatura Média", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("%.1f °C".format(temp), style = MaterialTheme.typography.headlineSmall)
+                        }
+                    }
+                }
+                **/
+
+                // ➍ seção de envio de configurações ao ESP32
+                ConfigSection(realTimeModel)
+
+            } else {
+                // se não estiver conectado
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Box(
@@ -136,25 +126,49 @@ fun MainScreen(realTimeModel: RealTimeViewModel) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Resumo ou Placeholder para informação adicional (como gráficos ou metas)
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(16.dp)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            // você pode adicionar aqui outros cards ou resumos
+        }
+    }
+}
+
+@SuppressLint("HardwareIds")
+@Composable
+fun ConfigSection(
+    realTimeModel: RealTimeViewModel
+) {
+    val sent by realTimeModel.configSent.collectAsState()
+
+    val context = LocalContext.current
+    // ID único do dispositivo
+    val deviceId = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ANDROID_ID
+    )
+    if (!sent) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Button(
+                onClick = {
+                    // timestamp atual
+                    val now = System.currentTimeMillis()
+                    realTimeModel.sendTimeConfig(now)
+                    // modo fixo = 2
+                    realTimeModel.sendModeConfig(2)
+                    // envia o ID do aparelho
+                    realTimeModel.sendIdConfig(deviceId)
+                },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "Resumo da atividade ou gráficos", style = MaterialTheme.typography.bodyLarge)
-                }
+                Text(
+                    text = "Enviar Config",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         }
+    }else {
+        Text("Configuração enviada com sucesso!", style = MaterialTheme.typography.bodyLarge)
     }
 }
