@@ -116,8 +116,16 @@ fun BottomNavScaffold() {
                     HistoricoScreen(onBackClick = { navController.popBackStack() })
                 }
                 composable("profile") {
-                    ProfileScreen()
+                    ProfileScreen(navToEdit = {
+                        navController.navigate("profile_setup")
+                    })
                 }
+                composable("profile_setup") {
+                    ProfileSetupScreen(onSave = {
+                        navController.popBackStack()  // volta para o ProfileScreen
+                    })
+                }
+
                 composable("define_workout") {
                     DefineWorkoutScreen(navController)
                 }
