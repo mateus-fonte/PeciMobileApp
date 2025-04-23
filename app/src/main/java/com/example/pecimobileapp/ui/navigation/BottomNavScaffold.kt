@@ -1,8 +1,6 @@
 package com.example.pecimobileapp.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
@@ -14,12 +12,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
+import com.example.pecimobileapp.ui.screens.WorkoutScreen
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,7 +30,6 @@ fun BottomNavScaffold() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // ViewModel para dados em tempo real do BLE/ESP32
     val realTimeModel: RealTimeViewModel = viewModel()
 
     Scaffold(
@@ -108,7 +109,7 @@ fun BottomNavScaffold() {
                 composable("setup") {
                     SetupScreen(
                         realTimeModel = realTimeModel,
-                        navController = navController // <-- Adicionado aqui
+                        navController = navController
                     )
                 }
                 composable("historico") {
@@ -117,6 +118,32 @@ fun BottomNavScaffold() {
                 composable("profile") {
                     ProfileScreen()
                 }
+                composable("define_workout") {
+                    DefineWorkoutScreen(navController)
+                }
+                composable("workout") {
+                    WorkoutScreen(
+                        navController = navController,
+                        mode = "individual",
+                        nickname = "Nicole",
+                        selectedZone = 3,
+                        heartRate = 145,
+                        temperature = 36.7f,
+                        execution = 92.5f,
+                        position = 1,
+                        top3 = listOf("Nicole" to 92, "João" to 88, "Ana" to 75),
+                        onStop = { navController.popBackStack() }
+                    )
+                }
+
+                composable("countdown") {
+                    CountdownScreen(navController = navController)
+                }
+
+
+
+
+
             }
         }
     }
