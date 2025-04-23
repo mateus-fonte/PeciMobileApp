@@ -1,100 +1,71 @@
 package com.example.pecimobileapp.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.pecimobileapp.ui.*
+import androidx.compose.ui.Alignment
 
-@OptIn(ExperimentalMaterial3Api::class)
+
+
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(navToEdit: () -> Unit = {}) {
+    val viewModel: ProfileViewModel = viewModel()
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.Top,
-                horizontalAlignment = Alignment.Start
-            ) {
-                // Exibe o nome
-                Text(
-                    text = "Maria",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                // Card com medidas: idade, peso, e altura
-                Card(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Medidas",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Idade: 32 anos",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = "Peso: 62 kg",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = "Altura: 1,68 m",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Text("Perfil", style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Divider()
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    ProfileField("Nome", viewModel.nome)
+                    ProfileField("Apelido", viewModel.apelido)
+                    ProfileField("Peso", "${viewModel.peso} kg")
+                    ProfileField("Ano de Nascimento", "${viewModel.anoNascimento}")
+                    ProfileField("FC Máxima", "${viewModel.fcMax} bpm")
+                    ProfileField("Idade", "${viewModel.idade} anos")
                 }
-                Spacer(modifier = Modifier.height(24.dp))
-                // Seção de Atividades Recentes
-                Text(
-                    text = "Atividades Recentes",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Passeio de bicicleta no Parque Ibirapuera - 25 km",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Sessão: 1h 15min",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Zonas de Frequência Cardíaca", style = MaterialTheme.typography.titleMedium)
+            viewModel.zonas.forEach { (nome, faixa) ->
+                Text("$nome: ${faixa.first} - ${faixa.last} bpm", style = MaterialTheme.typography.bodyLarge)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = navToEdit,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text("Editar Perfil")
             }
         }
+    }
+}
+
+@Composable
+fun ProfileField(label: String, value: String) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        Text(value, style = MaterialTheme.typography.bodyLarge)
     }
 }
