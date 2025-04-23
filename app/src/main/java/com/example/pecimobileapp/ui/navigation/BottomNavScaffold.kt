@@ -8,16 +8,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -37,7 +28,7 @@ fun BottomNavScaffold() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Instancia única do RealTimeViewModel para BLE+ESP32
+    // ViewModel para dados em tempo real do BLE/ESP32
     val realTimeModel: RealTimeViewModel = viewModel()
 
     Scaffold(
@@ -68,9 +59,9 @@ fun BottomNavScaffold() {
                         }
                     },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor   = Color.White,
+                        selectedIconColor = Color.White,
                         unselectedIconColor = Color.LightGray,
-                        selectedTextColor   = Color.White,
+                        selectedTextColor = Color.White,
                         unselectedTextColor = Color.LightGray
                     )
                 )
@@ -80,9 +71,9 @@ fun BottomNavScaffold() {
                     selected = currentRoute == "setup",
                     onClick = { navController.navigate("setup") },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor   = Color.White,
+                        selectedIconColor = Color.White,
                         unselectedIconColor = Color.LightGray,
-                        selectedTextColor   = Color.White,
+                        selectedTextColor = Color.White,
                         unselectedTextColor = Color.LightGray
                     )
                 )
@@ -92,9 +83,9 @@ fun BottomNavScaffold() {
                     selected = currentRoute == "historico",
                     onClick = { navController.navigate("historico") },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor   = Color.White,
+                        selectedIconColor = Color.White,
                         unselectedIconColor = Color.LightGray,
-                        selectedTextColor   = Color.White,
+                        selectedTextColor = Color.White,
                         unselectedTextColor = Color.LightGray
                     )
                 )
@@ -116,7 +107,8 @@ fun BottomNavScaffold() {
                 }
                 composable("setup") {
                     SetupScreen(
-                        realTimeModel = realTimeModel
+                        realTimeModel = realTimeModel,
+                        navController = navController // <-- Adicionado aqui
                     )
                 }
                 composable("historico") {
