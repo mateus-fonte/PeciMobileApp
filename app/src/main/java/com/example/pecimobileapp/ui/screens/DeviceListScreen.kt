@@ -45,7 +45,7 @@ fun DeviceListScreen(viewModel: BluetoothViewModel) {
             isScanning = isScanning,
             onStartScan = { viewModel.startScan() },
             onStopScan = { viewModel.stopScan() },
-            onAutoDetect = { viewModel.autoDetectRaspberryPi() }
+            onAutoDetect = TODO()
         )
 
         Spacer(modifier = Modifier.height(16.dp))

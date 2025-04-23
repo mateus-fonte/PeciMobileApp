@@ -22,30 +22,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.pecimobileapp.ui.screens.HistoricoScreen
-import com.example.pecimobileapp.ui.screens.MainScreen
-import com.example.pecimobileapp.ui.screens.ProfileScreen
-import com.example.pecimobileapp.ui.screens.SetupScreen
-import com.example.pecimobileapp.viewmodels.BluetoothViewModel
+import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BottomNavScaffold(viewModel: BluetoothViewModel) {
+fun BottomNavScaffold() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // Instancia única do RealTimeViewModel para BLE+ESP32
+    val realTimeModel: RealTimeViewModel = viewModel()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("The Heart Box", color = Color.White) },
                 actions = {
-                    // Navega para a tela de perfil
                     IconButton(onClick = { navController.navigate("profile") }) {
                         Icon(
                             imageVector = Icons.Default.Person,
@@ -60,7 +59,7 @@ fun BottomNavScaffold(viewModel: BluetoothViewModel) {
         bottomBar = {
             NavigationBar(containerColor = Color(0xFF8A2BE2)) {
                 NavigationBarItem(
-                    icon = { Icon(imageVector = Icons.Default.Home, contentDescription = "Home") },
+                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                     label = { Text("Home") },
                     selected = currentRoute == "main",
                     onClick = {
@@ -69,33 +68,33 @@ fun BottomNavScaffold(viewModel: BluetoothViewModel) {
                         }
                     },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.White,
+                        selectedIconColor   = Color.White,
                         unselectedIconColor = Color.LightGray,
-                        selectedTextColor = Color.White,
+                        selectedTextColor   = Color.White,
                         unselectedTextColor = Color.LightGray
                     )
                 )
                 NavigationBarItem(
-                    icon = { Icon(imageVector = Icons.Default.Settings, contentDescription = "Setup") },
+                    icon = { Icon(Icons.Default.Settings, contentDescription = "Setup") },
                     label = { Text("Setup") },
                     selected = currentRoute == "setup",
                     onClick = { navController.navigate("setup") },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.White,
+                        selectedIconColor   = Color.White,
                         unselectedIconColor = Color.LightGray,
-                        selectedTextColor = Color.White,
+                        selectedTextColor   = Color.White,
                         unselectedTextColor = Color.LightGray
                     )
                 )
                 NavigationBarItem(
-                    icon = { Icon(imageVector = Icons.Default.Star, contentDescription = "Histórico") },
+                    icon = { Icon(Icons.Default.Star, contentDescription = "Histórico") },
                     label = { Text("Histórico") },
                     selected = currentRoute == "historico",
                     onClick = { navController.navigate("historico") },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.White,
+                        selectedIconColor   = Color.White,
                         unselectedIconColor = Color.LightGray,
-                        selectedTextColor = Color.White,
+                        selectedTextColor   = Color.White,
                         unselectedTextColor = Color.LightGray
                     )
                 )
@@ -103,7 +102,7 @@ fun BottomNavScaffold(viewModel: BluetoothViewModel) {
         }
     ) { innerPadding ->
         Box(
-            modifier = Modifier
+            Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
@@ -113,15 +112,15 @@ fun BottomNavScaffold(viewModel: BluetoothViewModel) {
                 modifier = Modifier.fillMaxSize()
             ) {
                 composable("main") {
-                    // Tela inicial: exibe explicação de como usar a app
-                    MainScreen(realTimeModel = RealTimeViewModel())
+                    MainScreen(realTimeModel = realTimeModel)
                 }
                 composable("setup") {
-                    // Tela de Setup: configurações atuais (antigo conteúdo da MainScreen)
-                    SetupScreen(viewModel = viewModel)
+                    SetupScreen(
+                        realTimeModel = realTimeModel
+                    )
                 }
                 composable("historico") {
-                    HistoricoScreen(onBackClick = { navController.navigate("main") })
+                    HistoricoScreen(onBackClick = { navController.popBackStack() })
                 }
                 composable("profile") {
                     ProfileScreen()
