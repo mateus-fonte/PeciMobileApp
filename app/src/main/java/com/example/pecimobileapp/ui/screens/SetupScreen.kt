@@ -14,7 +14,7 @@ fun SetupScreen(
     navController: NavController
 ) {
     val sensorData by realTimeModel.realTimeData.collectAsState()
-    val isHeartRateAvailable = sensorData?.heartRate != null
+    // val isHeartRateAvailable = sensorData?.heartRate != null
 
     Card(
         modifier = Modifier
@@ -43,13 +43,14 @@ fun SetupScreen(
             Spacer(Modifier.height(24.dp))
 
             Button(
-                onClick = { navController.navigate("countdown") },
-                enabled = isHeartRateAvailable,
+                onClick = { navController.navigate("define_workout") },
+                // enabled = isHeartRateAvailable, // <-- Comentado
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Iniciar Atividade Física")
             }
 
+            /*
             if (!isHeartRateAvailable) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -58,6 +59,7 @@ fun SetupScreen(
                     color = MaterialTheme.colorScheme.error
                 )
             }
+            */
         }
     }
 }
