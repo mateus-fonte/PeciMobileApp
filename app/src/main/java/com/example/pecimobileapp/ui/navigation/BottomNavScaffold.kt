@@ -116,25 +116,34 @@ fun BottomNavScaffold() {
                     HistoricoScreen(onBackClick = { navController.popBackStack() })
                 }
                 composable("profile") {
-                    ProfileScreen()
+                    ProfileScreen(navToEdit = {
+                        navController.navigate("profile_setup")
+                    })
                 }
+                composable("profile_setup") {
+                    ProfileSetupScreen(onSave = {
+                        navController.popBackStack()  // volta para o ProfileScreen
+                    })
+                }
+
                 composable("define_workout") {
                     DefineWorkoutScreen(navController)
                 }
-                composable("workout") {
+                composable("workout/{zone}/{nickname}") { backStackEntry ->
+                    val zone = backStackEntry.arguments?.getString("zone")?.toIntOrNull() ?: 1
+                    val nickname = backStackEntry.arguments?.getString("nickname") ?: "YOU"
+
                     WorkoutScreen(
                         navController = navController,
-                        mode = "individual",
-                        nickname = "Nicole",
-                        selectedZone = 3,
+                        selectedZone = zone,
+                        nickname = nickname,
                         heartRate = 145,
                         temperature = 36.7f,
                         execution = 92.5f,
-                        position = 1,
-                        top3 = listOf("Nicole" to 92, "João" to 88, "Ana" to 75),
                         onStop = { navController.popBackStack() }
                     )
                 }
+
 
                 composable("countdown") {
                     CountdownScreen(navController = navController)
