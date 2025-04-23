@@ -1,34 +1,27 @@
 package com.example.pecimobileapp.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
+import com.example.pecimobileapp.ui.screens.WorkoutScreen
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,7 +30,6 @@ fun BottomNavScaffold() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Instancia única do RealTimeViewModel para BLE+ESP32
     val realTimeModel: RealTimeViewModel = viewModel()
 
     Scaffold(
@@ -68,9 +60,9 @@ fun BottomNavScaffold() {
                         }
                     },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor   = Color.White,
+                        selectedIconColor = Color.White,
                         unselectedIconColor = Color.LightGray,
-                        selectedTextColor   = Color.White,
+                        selectedTextColor = Color.White,
                         unselectedTextColor = Color.LightGray
                     )
                 )
@@ -80,9 +72,9 @@ fun BottomNavScaffold() {
                     selected = currentRoute == "setup",
                     onClick = { navController.navigate("setup") },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor   = Color.White,
+                        selectedIconColor = Color.White,
                         unselectedIconColor = Color.LightGray,
-                        selectedTextColor   = Color.White,
+                        selectedTextColor = Color.White,
                         unselectedTextColor = Color.LightGray
                     )
                 )
@@ -92,9 +84,9 @@ fun BottomNavScaffold() {
                     selected = currentRoute == "historico",
                     onClick = { navController.navigate("historico") },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor   = Color.White,
+                        selectedIconColor = Color.White,
                         unselectedIconColor = Color.LightGray,
-                        selectedTextColor   = Color.White,
+                        selectedTextColor = Color.White,
                         unselectedTextColor = Color.LightGray
                     )
                 )
@@ -116,7 +108,8 @@ fun BottomNavScaffold() {
                 }
                 composable("setup") {
                     SetupScreen(
-                        realTimeModel = realTimeModel
+                        realTimeModel = realTimeModel,
+                        navController = navController
                     )
                 }
                 composable("historico") {
@@ -125,6 +118,33 @@ fun BottomNavScaffold() {
                 composable("profile") {
                     ProfileScreen()
                 }
+                composable("define_workout") {
+                    DefineWorkoutScreen(navController)
+                }
+                composable("workout/{zone}/{nickname}") { backStackEntry ->
+                    val zone = backStackEntry.arguments?.getString("zone")?.toIntOrNull() ?: 1
+                    val nickname = backStackEntry.arguments?.getString("nickname") ?: "YOU"
+
+                    WorkoutScreen(
+                        navController = navController,
+                        selectedZone = zone,
+                        nickname = nickname,
+                        heartRate = 145,
+                        temperature = 36.7f,
+                        execution = 92.5f,
+                        onStop = { navController.popBackStack() }
+                    )
+                }
+
+
+                composable("countdown") {
+                    CountdownScreen(navController = navController)
+                }
+
+
+
+
+
             }
         }
     }
