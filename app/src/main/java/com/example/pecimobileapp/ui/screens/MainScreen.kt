@@ -1,156 +1,123 @@
-// MainScreen.kt
 package com.example.pecimobileapp.ui.screens
 
-import android.annotation.SuppressLint
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 @Composable
 fun MainScreen(
-    realTimeModel: RealTimeViewModel
+    viewModel: RealTimeViewModel
 ) {
-    // ➊ coleta os fluxos do ViewModel
-    val isConnected by realTimeModel.isConnected.collectAsState()
-    val configSent  by realTimeModel.configSent.collectAsState()
-    val heartRate   by realTimeModel.heartRate.collectAsState()
+    // 1) Coleta dos valores
+    val hr        by viewModel.ppgHeartRate.collectAsState()
+    val avgTemp   by viewModel.avgTemp.collectAsState()
+    val maxTemp   by viewModel.maxTemp.collectAsState()
+    val minTemp   by viewModel.minTemp.collectAsState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.secondary
-                    )
-                )
-            )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Bom treino, Ciclista!",
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (isConnected) {
-
-                if (configSent) {
-                    // ➋ exibe a frequência cardíaca
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                "Frequência Cardíaca",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = heartRate?.let { "$it BPM" } ?: "-- BPM",
-                                style = MaterialTheme.typography.headlineLarge
-                            )
-                        }
-                    }
-                }
-            } else {
-                // Se não estiver conectado ainda
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Por favor, faça o setup dos sensores para iniciar o monitoramento.",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@SuppressLint("HardwareIds")
-@Composable
-fun ConfigSection(
-    realTimeModel: RealTimeViewModel
-) {
-    // Estado de feedback de envio
-    val configSent by realTimeModel.configSent.collectAsState()
-
-    // Gera automaticamente
-    val timestamp = remember { System.currentTimeMillis() }
-    val mode = 2
-    val id = remember { java.util.UUID.randomUUID().toString() }
+    // 2) Estado de conexão
+    val isPpgConnected by viewModel.isPpgConnected.collectAsState()
+    val isCamConnected by viewModel.isCamConnected.collectAsState()
 
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (!configSent) {
-            // Mostra valores que a app envia (não editáveis)
-            Text("Timestamp: $timestamp", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(4.dp))
-            Text("Mode: $mode",        style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(4.dp))
-            Text("ID: $id",            style = MaterialTheme.typography.bodyMedium)
+        Text("Bom treino, ciclista!", style = MaterialTheme.typography.headlineSmall)
+
+        Spacer(Modifier.height(24.dp))
+
+        // --- Card de Frequência Cardíaca ---
+        if (isPpgConnected) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Frequência Cardíaca", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = hr?.let { "$it BPM" } ?: "-- BPM",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        // --- Cards de Temperatura ---
+        if (isCamConnected) {
+            // Média
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Temperatura Média", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = avgTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                }
+            }
+
             Spacer(Modifier.height(16.dp))
 
-            // Botão para enviar tudo de uma vez
-            Button(
-                onClick = {
-                    realTimeModel.sendTimeConfig(timestamp)
-                    realTimeModel.sendModeConfig(mode)
-                    realTimeModel.sendIdConfig(id)
-                },
-                modifier = Modifier.fillMaxWidth()
+            // Máxima
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
             ) {
-                Text("Enviar Configurações")
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Temperatura Máxima", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = maxTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                }
             }
-        } else {
-            // ✓ verde quando todas as writes retornarem sucesso
-            Text(
-                text = "✓ Configurações enviadas com sucesso!",
-                color = Color(0xFF4CAF50),
-                style = MaterialTheme.typography.bodyLarge
-            )
+
+            Spacer(Modifier.height(16.dp))
+
+            // Mínima
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Temperatura Mínima", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = minTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                }
+            }
         }
     }
 }

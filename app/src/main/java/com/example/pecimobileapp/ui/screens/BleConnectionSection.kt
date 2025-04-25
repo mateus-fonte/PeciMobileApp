@@ -1,76 +1,42 @@
-// BleConnectionSection.kt
 package com.example.pecimobileapp.ui.screens
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.le.ScanResult
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
+@SuppressLint("MissingPermission")
 @Composable
 fun BleConnectionSection(
-    viewModel: RealTimeViewModel,
-    onActivateBle: () -> Unit
+    title       : String,
+    scanResults: List<ScanResult>,
+    isConnected: Boolean,
+    onScan: () -> Unit,
+    onConnect: (BluetoothDevice) -> Unit
 ) {
-    val context = LocalContext.current
-    // ➊ agora lê corretamente do ViewModel
-    val scanResults by viewModel.scanResults.collectAsState()
-    val isConnected by viewModel.isConnected.collectAsState()
-
-    val hasConnectPermission = remember {
-        mutableStateOf(
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-                    ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-
-    Column(modifier = Modifier
-        .fillMaxWidth()
-        .padding(8.dp)
-    ) {
+    Column(Modifier.fillMaxWidth().padding(8.dp)) {
         if (!isConnected) {
-            Button(
-                onClick = onActivateBle,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Escanear ESP32 (BLE)")
+            Button(onClick = onScan, Modifier.fillMaxWidth()) {
+                Text("Escanear $title")
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
             scanResults.forEach { result ->
-                val name = if (hasConnectPermission.value) {
-                    result.device.name ?: "Sem nome"
-                } else {
-                    "Sem permissão"
-                }
-                val addr = if (hasConnectPermission.value) {
-                    result.device.address
-                } else {
-                    "--:--:--"
-                }
-
                 Button(
-                    onClick = { viewModel.connectToDevice(result.device) },
-                    modifier = Modifier
+                    onClick = { onConnect(result.device) },
+                    Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
                 ) {
-                    Text("$name • $addr")
+                    Text(result.device.name ?: result.device.address)
                 }
             }
         } else {
             Text(
-                text = "ESP32 conectado!",
+                text = "$title conectado!",
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(8.dp)
             )

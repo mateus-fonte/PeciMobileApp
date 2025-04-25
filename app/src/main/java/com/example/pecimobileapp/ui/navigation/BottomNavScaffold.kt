@@ -29,6 +29,7 @@ fun BottomNavScaffold() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val vm: RealTimeViewModel = viewModel()
 
     val realTimeModel: RealTimeViewModel = viewModel()
 
@@ -103,15 +104,10 @@ fun BottomNavScaffold() {
                 startDestination = "main",
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable("main") {
-                    MainScreen(realTimeModel = realTimeModel)
-                }
-                composable("setup") {
-                    SetupScreen(
-                        realTimeModel = realTimeModel,
-                        navController = navController
-                    )
-                }
+                composable("setup") { SetupScreen(vm, navController) }
+
+                composable("main")  { MainScreen(vm) }
+
                 composable("historico") {
                     HistoricoScreen(onBackClick = { navController.popBackStack() })
                 }
