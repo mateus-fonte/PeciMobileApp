@@ -56,7 +56,8 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.appcompat)
-//    testImplementation(libs.junit)
+    //implementation(libs.opencv.android)
+    testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -65,6 +66,6 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     //implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.4'
     //implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
-  //  implementation(libs.opencv.img)
+    //implementation(libs.opencv.img)
 
 }
