@@ -118,25 +118,38 @@ class BleManager(private val context: Context) {
                 }
             }
 
+            @SuppressLint("MissingPermission")
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
                 if (status != BluetoothGatt.GATT_SUCCESS) return
 
-                // lista de todas as características que queremos NOTIFY
+                // Lista de pares (UUID do serviço → UUID da characteristic) para NOTIFY
                 listOf(
-                    HR_SERVICE_UUID    to HR_CHAR_UUID,
-                    SENSOR_SERVICE_UUID to SENSOR_DATA1_UUID,
-                    SENSOR_SERVICE_UUID to SENSOR_DATA2_UUID,
-                    SENSOR_SERVICE_UUID to SENSOR_DATA3_UUID
+                    HR_SERVICE_UUID       to HR_CHAR_UUID,
+                    SENSOR_SERVICE_UUID   to SENSOR_DATA1_UUID,
+                    SENSOR_SERVICE_UUID   to SENSOR_DATA2_UUID,
+                    SENSOR_SERVICE_UUID   to SENSOR_DATA3_UUID
                 ).forEach { (svcUuid, chrUuid) ->
-                    g.getService(svcUuid)
-                        ?.getCharacteristic(chrUuid)
-                        ?.let { chr ->
-                            g.setCharacteristicNotification(chr, true)
-                            chr.getDescriptor(CLIENT_CFG_UUID)?.apply {
-                                value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                g.writeDescriptor(this)
-                            }
-                        }
+                    val service = g.getService(svcUuid)
+                    if (service == null) {
+                        Log.w("BleManager", "Serviço $svcUuid não encontrado")
+                        return@forEach
+                    }
+                    val chr = service.getCharacteristic(chrUuid)
+                    if (chr == null) {
+                        Log.w("BleManager", "Characteristic $chrUuid não encontrada em $svcUuid")
+                        return@forEach
+                    }
+
+                    // Habilita NOTIFY
+                    g.setCharacteristicNotification(chr, true)
+                    val descriptor = chr.getDescriptor(CLIENT_CFG_UUID)
+                    if (descriptor == null) {
+                        Log.w("BleManager", "Descriptor CLIENT_CFG_UUID não encontrado em $chrUuid")
+                        return@forEach
+                    }
+
+                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    g.writeDescriptor(descriptor)
                 }
             }
 
@@ -170,27 +183,19 @@ class BleManager(private val context: Context) {
                     SENSOR_DATA1_UUID,
                     SENSOR_DATA2_UUID,
                     SENSOR_DATA3_UUID -> {
-                        // lê 4 bytes como float little-endian
-                        val buf = ByteBuffer.wrap(characteristic.value)
-                            .order(ByteOrder.LITTLE_ENDIAN)
-                        val rawValue = buf.float
-
-                        // divide por 100 conforme pedido
-                        val corrected = rawValue / 100f
+                        // converte o payload em String
+                        val raw = String(characteristic.value, Charsets.UTF_8)
+                        // tudo após o ponto
+                        val frac = raw.substringAfter('.', "0")
+                        // só mantém dígitos
+                        val digits = frac.filter { it.isDigit() }
+                        // converte em inteiro e divide por 100
+                        val temp = digits.toIntOrNull()?.div(100f) ?: 0f
 
                         when (characteristic.uuid) {
-                            SENSOR_DATA1_UUID -> {
-                                _avgTemp.value = corrected
-                                Log.d(TAG, "AvgTemp → raw=$rawValue, afterDiv=$corrected")
-                            }
-                            SENSOR_DATA2_UUID -> {
-                                _maxTemp.value = corrected
-                                Log.d(TAG, "MaxTemp → raw=$rawValue, afterDiv=$corrected")
-                            }
-                            SENSOR_DATA3_UUID -> {
-                                _minTemp.value = corrected
-                                Log.d(TAG, "MinTemp → raw=$rawValue, afterDiv=$corrected")
-                            }
+                            SENSOR_DATA1_UUID -> _avgTemp.value = temp
+                            SENSOR_DATA2_UUID -> _maxTemp.value = temp
+                            SENSOR_DATA3_UUID -> _minTemp.value = temp
                         }
                     }
                 }
