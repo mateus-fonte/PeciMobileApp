@@ -2,7 +2,6 @@
 package com.example.pecimobileapp.ui.screens
 
 import android.annotation.SuppressLint
-import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,7 +11,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
@@ -20,9 +18,10 @@ import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 fun MainScreen(
     realTimeModel: RealTimeViewModel
 ) {
-    // ➊ coleta os dados do BLE/ESP32
-    val sensorData by realTimeModel.realTimeData.collectAsState()
+    // ➊ coleta os fluxos do ViewModel
     val isConnected by realTimeModel.isConnected.collectAsState()
+    val configSent  by realTimeModel.configSent.collectAsState()
+    val heartRate   by realTimeModel.heartRate.collectAsState()
 
     Box(
         modifier = Modifier
@@ -53,30 +52,9 @@ fun MainScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             if (isConnected) {
-                // ➋ exibe a frequência cardíaca
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Frequência Cardíaca", style = MaterialTheme.typography.titleMedium)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = sensorData?.heartRate?.let { "$it BPM" } ?: "-- BPM",
-                            style = MaterialTheme.typography.headlineLarge
-                        )
-                    }
-                }
-                /**
-                // ➌ exibe a temperatura média (se tiver)
-                sensorData?.averageTemperature?.let { temp ->
+
+                if (configSent) {
+                    // ➋ exibe a frequência cardíaca
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -86,22 +64,23 @@ fun MainScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(
-                            modifier = Modifier.padding(16.dp),
+                            modifier = Modifier.padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Temperatura Média", style = MaterialTheme.typography.bodyMedium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("%.1f °C".format(temp), style = MaterialTheme.typography.headlineSmall)
+                            Text(
+                                "Frequência Cardíaca",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = heartRate?.let { "$it BPM" } ?: "-- BPM",
+                                style = MaterialTheme.typography.headlineLarge
+                            )
                         }
                     }
                 }
-                **/
-
-                // ➍ seção de envio de configurações ao ESP32
-                ConfigSection(realTimeModel)
-
             } else {
-                // se não estiver conectado
+                // Se não estiver conectado ainda
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -123,10 +102,6 @@ fun MainScreen(
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // você pode adicionar aqui outros cards ou resumos
         }
     }
 }
@@ -136,39 +111,46 @@ fun MainScreen(
 fun ConfigSection(
     realTimeModel: RealTimeViewModel
 ) {
-    val sent by realTimeModel.configSent.collectAsState()
+    // Estado de feedback de envio
+    val configSent by realTimeModel.configSent.collectAsState()
 
-    val context = LocalContext.current
-    // ID único do dispositivo
-    val deviceId = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ANDROID_ID
-    )
-    if (!sent) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
+    // Gera automaticamente
+    val timestamp = remember { System.currentTimeMillis() }
+    val mode = 2
+    val id = remember { java.util.UUID.randomUUID().toString() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        if (!configSent) {
+            // Mostra valores que a app envia (não editáveis)
+            Text("Timestamp: $timestamp", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Text("Mode: $mode",        style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Text("ID: $id",            style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(16.dp))
+
+            // Botão para enviar tudo de uma vez
             Button(
                 onClick = {
-                    // timestamp atual
-                    val now = System.currentTimeMillis()
-                    realTimeModel.sendTimeConfig(now)
-                    // modo fixo = 2
-                    realTimeModel.sendModeConfig(2)
-                    // envia o ID do aparelho
-                    realTimeModel.sendIdConfig(deviceId)
+                    realTimeModel.sendTimeConfig(timestamp)
+                    realTimeModel.sendModeConfig(mode)
+                    realTimeModel.sendIdConfig(id)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Enviar Config",
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Text("Enviar Configurações")
             }
+        } else {
+            // ✓ verde quando todas as writes retornarem sucesso
+            Text(
+                text = "✓ Configurações enviadas com sucesso!",
+                color = Color(0xFF4CAF50),
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
-    }else {
-        Text("Configuração enviada com sucesso!", style = MaterialTheme.typography.bodyLarge)
     }
 }
