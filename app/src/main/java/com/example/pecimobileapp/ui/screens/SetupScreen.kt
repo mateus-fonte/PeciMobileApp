@@ -1,6 +1,8 @@
 package com.example.pecimobileapp.ui.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -10,56 +12,54 @@ import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 @Composable
 fun SetupScreen(
-    realTimeModel: RealTimeViewModel,
+    viewModel    : RealTimeViewModel,
     navController: NavController
 ) {
-    val sensorData by realTimeModel.realTimeData.collectAsState()
-    // val isHeartRateAvailable = sensorData?.heartRate != null
+    val ppgResults   by viewModel.scanResultsPpg.collectAsState()
+    val camResults   by viewModel.scanResultsCam.collectAsState()
+    val ppgConnected by viewModel.isPpgConnected.collectAsState()
+    val camConnected by viewModel.isCamConnected.collectAsState()
+    val ready        by viewModel.readyToStart.collectAsState()
 
-    Card(
-        modifier = Modifier
+    Column(
+        Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        shape = MaterialTheme.shapes.large,
-        elevation = CardDefaults.cardElevation(8.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
+        BleConnectionSection(
+            title       = "PPG / Smartwatch",
+            scanResults = ppgResults,
+            isConnected = ppgConnected,
+            onScan      = { viewModel.startPpgScan() },
+            onConnect   = { viewModel.connectPpg(it) }
+        )
+
+        Spacer(Modifier.height(24.dp))
+
+        BleConnectionSection(
+            title       = "Câmera Térmica",
+            scanResults = camResults,
+            isConnected = camConnected,
+            onScan      = { viewModel.startCamScan() },
+            onConnect   = { viewModel.connectCam(it) }
+        )
+
+        Spacer(Modifier.height(32.dp))
+
+        Button(
+            onClick = { navController.navigate("main") },
+            enabled = ready,
+            modifier = Modifier.fillMaxWidth()
         ) {
+            Text("Iniciar Atividade Física")
+        }
+        if (!ready) {
+            Spacer(Modifier.height(8.dp))
             Text(
-                text = "Setup ESP32",
-                style = MaterialTheme.typography.headlineSmall
+                "Conecte ambos os dispositivos para prosseguir",
+                color = MaterialTheme.colorScheme.error
             )
-
-            Spacer(Modifier.height(16.dp))
-
-            BleConnectionSection(
-                viewModel = realTimeModel,
-                onActivateBle = { realTimeModel.startBleScan() }
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            Button(
-                onClick = { navController.navigate("define_workout") },
-                // enabled = isHeartRateAvailable, // <-- Comentado
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Iniciar Atividade Física")
-            }
-
-            /*
-            if (!isHeartRateAvailable) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Conecte-se ao sensor para iniciar",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-            */
         }
     }
 }

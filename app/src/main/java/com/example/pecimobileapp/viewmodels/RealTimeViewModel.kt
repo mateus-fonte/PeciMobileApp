@@ -1,79 +1,42 @@
 package com.example.pecimobileapp.viewmodels
 
 import android.app.Application
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.le.ScanResult
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.ble.BleManager
-import com.example.pecimobileapp.models.RealTimeData
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-class RealTimeViewModel(application: Application) : AndroidViewModel(application) {
-    private val bleManager = BleManager(application)
+class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
+    private val blePpg = BleManager(app)
+    private val bleCam = BleManager(app)
 
-    // ➊ expõe os resultados do scan
-    val scanResults: StateFlow<List<android.bluetooth.le.ScanResult>> = bleManager.scanResults
+    // 1) Resultados de scan separados
+    val scanResultsPpg: StateFlow<List<ScanResult>> = blePpg.scanResults
+    val scanResultsCam: StateFlow<List<ScanResult>> = bleCam.scanResults
 
-    // ➋ expõe o fluxo de heartRate
-    val heartRate: StateFlow<Int?> = bleManager.heartRate
+    // 2) Status de conexão
+    val isPpgConnected: StateFlow<Boolean> = blePpg.isConnected
+    val isCamConnected: StateFlow<Boolean> = bleCam.isConnected
 
-    // ➌ expõe quando o write de configuração foi confirmado
-    val configSent: StateFlow<Boolean> = bleManager.configSent
+    // 3) Dados notificados
+    val ppgHeartRate: StateFlow<Int?>      = blePpg.ppgHeartRate
+    val avgTemp      : StateFlow<Float?>    = bleCam.avgTemp
+    val maxTemp      : StateFlow<Float?>    = bleCam.maxTemp
+    val minTemp      : StateFlow<Float?>    = bleCam.minTemp
 
-    // ➍ nosso estado interno de "estamos prontos p/ mostrar dados?"
-    private val _isConnected = MutableStateFlow(false)
-    val isConnected: StateFlow<Boolean> = bleManager.isConnected
+    // 4) Só libera o início quando AMBOS estiverem conectados
+    val readyToStart: StateFlow<Boolean> =
+        combine(isPpgConnected, isCamConnected) { ppg, cam -> ppg or cam }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    // ➎ dados que a UI consome
-    private val _realTimeData = MutableStateFlow<RealTimeData?>(null)
-    val realTimeData: StateFlow<RealTimeData?> = _realTimeData.asStateFlow()
 
-    init {
-        // Combine heartRate + configSent: só emitimos dados após configSent == true E hr != null
-        combine(heartRate, configSent) { hr, sent -> hr to sent }
-            .onEach { (hr, sent) ->
-                if (sent && hr != null) {
-                    _isConnected.value = true
-                    // atualiza ou cria novo RealTimeData
-                    val now = System.currentTimeMillis()
-                    _realTimeData.value = _realTimeData.value
-                        ?.copy(heartRate = hr, timestamp = now)
-                        ?: RealTimeData(
-                            heartRate         = hr,
-                            averageTemperature = 0f,        // ou monte aqui
-                            timestamp         = now,
-                            value             = 0f         // ajuste conforme seu modelo
-                        )
-                } else {
-                    _isConnected.value = false
-                    _realTimeData.value = null
-                }
-            }
-            .launchIn(viewModelScope)
-    }
+    // Métodos acionados pela UI
+    fun startPpgScan()           = viewModelScope.launch { blePpg.startScan() }
+    fun connectPpg(device: BluetoothDevice) = viewModelScope.launch { blePpg.connectPpg(device) }
 
-    /** Dispara o scan BLE */
-    fun startBleScan() = viewModelScope.launch {
-        bleManager.startBleScan()
-    }
-
-    /** Conecta ao device selecionado */
-    fun connectToDevice(device: android.bluetooth.BluetoothDevice) = viewModelScope.launch {
-        bleManager.connectToDevice(device)
-    }
-
-    /** Envia o timestamp fixo */
-    fun sendTimeConfig(ts: Long) = viewModelScope.launch {
-        bleManager.sendTimeConfig(ts)
-    }
-
-    /** Envia o mode (2 fixo) */
-    fun sendModeConfig(mode: Int) = viewModelScope.launch {
-        bleManager.sendModeConfig(mode)
-    }
-
-    /** Envia o ID */
-    fun sendIdConfig(id: String) = viewModelScope.launch {
-        bleManager.sendIdConfig(id)
-    }
+    fun startCamScan()           = viewModelScope.launch { bleCam.startScan() }
+    fun connectCam(device: BluetoothDevice) = viewModelScope.launch { bleCam.connectCam(device) }
 }

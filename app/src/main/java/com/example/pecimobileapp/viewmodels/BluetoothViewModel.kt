@@ -86,17 +86,17 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     fun startBleScanForEsp32() {
         // Isso chama a função extraída do código ESP32 para iniciar o scan
         CoroutineScope(Dispatchers.IO).launch {
-            bleManager.startBleScan()
+            bleManager.startScan()
         }
     }
 
     fun startBleScan() = viewModelScope.launch(Dispatchers.IO) {
-        bleManager.startBleScan()
+        bleManager.startScan()
     }
 
     fun connectBleToDevice(device: BluetoothDevice) {
         viewModelScope.launch(Dispatchers.IO) {
-            bleManager.connectToDevice(device)
+            bleManager.connectPpg(device)
             // depois disso você pode atualizar _isBleConnected = true
             _isBleConnected.value = true
         }
