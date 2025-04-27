@@ -1,11 +1,10 @@
 package com.example.pecimobileapp.ble
 
-import android.annotation.SuppressLint
 import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
-import android.content.ContentValues.TAG
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -16,8 +15,9 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import java.io.File
+import java.io.FileWriter
+import java.io.IOException
 import java.util.*
 
 private val HR_SERVICE_UUID        = UUID.fromString("e626a696-36ba-45b3-a444-5c28eb674dd5")
@@ -31,13 +31,15 @@ private val SENSOR_DATA3_UUID      = UUID.fromString("853f9ba1-94aa-4124-92ff-5a
 private val CLIENT_CFG_UUID        = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
 class BleManager(private val context: Context) {
+    private val TAG = "BleManager"
+
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val adapter: BluetoothAdapter? get() = bluetoothManager.adapter
     private var gatt: BluetoothGatt? = null
 
     // --- scan results ---
     private val _scanResults = MutableStateFlow<List<ScanResult>>(emptyList())
-    val scanResults   : StateFlow<List<ScanResult>>   = _scanResults
+    val scanResults: StateFlow<List<ScanResult>> = _scanResults
 
     // --- conexão geral ---
     private val _connected   = MutableStateFlow(false)
@@ -45,17 +47,17 @@ class BleManager(private val context: Context) {
 
     // --- dados PPG/Smartwatch ---
     private val _ppgHeartRate = MutableStateFlow<Int?>(null)
-    val ppgHeartRate  : StateFlow<Int?>               = _ppgHeartRate
+    val ppgHeartRate: StateFlow<Int?> = _ppgHeartRate
 
     // --- dados câmera térmica ---
     private val _avgTemp      = MutableStateFlow<Float?>(null)
     val avgTemp       : StateFlow<Float?>             = _avgTemp
 
-    private val _maxTemp      = MutableStateFlow<Float?>(null)
-    val maxTemp       : StateFlow<Float?>             = _maxTemp
+    private val _maxTemp = MutableStateFlow<Float?>(null)
+    val maxTemp: StateFlow<Float?> = _maxTemp
 
-    private val _minTemp      = MutableStateFlow<Float?>(null)
-    val minTemp       : StateFlow<Float?>             = _minTemp
+    private val _minTemp = MutableStateFlow<Float?>(null)
+    val minTemp: StateFlow<Float?> = _minTemp
 
     private val scanCb = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -124,19 +126,19 @@ class BleManager(private val context: Context) {
 
                 // Lista de pares (UUID do serviço → UUID da characteristic) para NOTIFY
                 listOf(
-                    HR_SERVICE_UUID       to HR_CHAR_UUID,
-                    SENSOR_SERVICE_UUID   to SENSOR_DATA1_UUID,
-                    SENSOR_SERVICE_UUID   to SENSOR_DATA2_UUID,
-                    SENSOR_SERVICE_UUID   to SENSOR_DATA3_UUID
+                    HR_SERVICE_UUID to HR_CHAR_UUID,
+                    SENSOR_SERVICE_UUID to SENSOR_DATA1_UUID,
+                    SENSOR_SERVICE_UUID to SENSOR_DATA2_UUID,
+                    SENSOR_SERVICE_UUID to SENSOR_DATA3_UUID
                 ).forEach { (svcUuid, chrUuid) ->
                     val service = g.getService(svcUuid)
                     if (service == null) {
-                        Log.w("BleManager", "Serviço $svcUuid não encontrado")
+                        Log.w(TAG, "Serviço $svcUuid não encontrado")
                         return@forEach
                     }
                     val chr = service.getCharacteristic(chrUuid)
                     if (chr == null) {
-                        Log.w("BleManager", "Characteristic $chrUuid não encontrada em $svcUuid")
+                        Log.w(TAG, "Characteristic $chrUuid não encontrada em $svcUuid")
                         return@forEach
                     }
 
@@ -144,7 +146,7 @@ class BleManager(private val context: Context) {
                     g.setCharacteristicNotification(chr, true)
                     val descriptor = chr.getDescriptor(CLIENT_CFG_UUID)
                     if (descriptor == null) {
-                        Log.w("BleManager", "Descriptor CLIENT_CFG_UUID não encontrado em $chrUuid")
+                        Log.w(TAG, "Descriptor CLIENT_CFG_UUID não encontrado em $chrUuid")
                         return@forEach
                     }
 
@@ -153,21 +155,15 @@ class BleManager(private val context: Context) {
                 }
             }
 
-            override fun onDescriptorWrite(
-                g: BluetoothGatt,
-                descriptor: BluetoothGattDescriptor,
-                status: Int
-            ) {
-                // só marcamos "conectado" após o primeiro notify habilitado
+            override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     _connected.value = true
                 }
             }
 
-            override fun onCharacteristicChanged(
-                gatt: BluetoothGatt,
-                characteristic: BluetoothGattCharacteristic
-            ) {
+            override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+                val raw = String(characteristic.value, Charsets.UTF_8)
+
                 when (characteristic.uuid) {
                     HR_CHAR_UUID -> {
                         val raw = String(characteristic.value, Charsets.UTF_8)
@@ -178,14 +174,10 @@ class BleManager(private val context: Context) {
                         _ppgHeartRate.value = hrValue
 
                         Log.d(TAG, "HR → raw=\"$raw\", afterDot=\"$afterDot\", digits=\"$digits\", hrValue=$hrValue")
+                        saveToFile(raw)
                     }
 
-                    SENSOR_DATA1_UUID,
-                    SENSOR_DATA2_UUID,
-                    SENSOR_DATA3_UUID -> {
-                        // converte o payload em String
-                        val raw = String(characteristic.value, Charsets.UTF_8)
-                        // tudo após o ponto
+                    SENSOR_DATA1_UUID, SENSOR_DATA2_UUID, SENSOR_DATA3_UUID -> {
                         val frac = raw.substringAfter('.', "0")
                         // só mantém dígitos
                         val digits = frac.filter { it.isDigit() }
@@ -197,6 +189,9 @@ class BleManager(private val context: Context) {
                             SENSOR_DATA2_UUID -> _maxTemp.value = temp
                             SENSOR_DATA3_UUID -> _minTemp.value = temp
                         }
+
+                        Log.d(TAG, "Temp → raw=\"$raw\", frac=\"$frac\", digits=\"$digits\", temp=$temp")
+                        saveToFile(raw)
                     }
                 }
             }
@@ -206,4 +201,18 @@ class BleManager(private val context: Context) {
     /** Chamadas públicas */
     fun connectPpg(device: BluetoothDevice) = connect(device)
     fun connectCam(device: BluetoothDevice) = connect(device)
+
+    private fun saveToFile(data: String) {
+        try {
+            val path = context.getExternalFilesDir(null) ?: context.filesDir
+            val file = File(path, "bpm_log.txt")
+            val writer = FileWriter(file, true)
+            writer.append(data).append("\n")
+            writer.flush()
+            writer.close()
+            Log.d(TAG, "Salvo no arquivo: $data no caminho: ${file.absolutePath}")
+        } catch (e: IOException) {
+            Log.e(TAG, "Erro ao salvar no arquivo", e)
+        }
+    }
 }
