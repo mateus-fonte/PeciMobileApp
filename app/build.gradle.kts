@@ -57,6 +57,11 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.appcompat)
     //implementation(libs.opencv.android)
+
+    // WebSocket e processamento de imagens
+    implementation("org.java-websocket:Java-WebSocket:1.5.3")
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -64,7 +69,7 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    //implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.4'
+//implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.4'
     //implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
     //implementation(libs.opencv.img)
 

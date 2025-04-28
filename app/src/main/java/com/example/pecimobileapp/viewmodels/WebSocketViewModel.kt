@@ -1,0 +1,72 @@
+package com.example.pecimobileapp.viewmodels
+
+import android.app.Application
+import android.graphics.Bitmap
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.pecimobileapp.services.WebSocketServerService
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+
+/**
+ * ViewModel para gerenciar o servidor WebSocket e os dados recebidos
+ */
+class WebSocketViewModel(application: Application) : AndroidViewModel(application) {
+    
+    // Serviço WebSocket
+    private val webSocketServer = WebSocketServerService(application.applicationContext)
+    
+    // Observáveis para a UI
+    val isServerRunning: StateFlow<Boolean> = webSocketServer.isRunning
+    val latestCameraImage: StateFlow<Pair<Bitmap?, String>> = webSocketServer.latestCameraImage
+    val latestThermalData: StateFlow<Pair<FloatArray?, String>> = webSocketServer.latestThermalData
+    val connectionStats: StateFlow<WebSocketServerService.ConnectionStats> = webSocketServer.connectionStats
+    
+    /**
+     * Inicia o servidor WebSocket
+     */
+    fun startServer(port: Int = 8080) {
+        viewModelScope.launch {
+            webSocketServer.startServer(port)
+        }
+    }
+    
+    /**
+     * Para o servidor WebSocket
+     */
+    fun stopServer() {
+        viewModelScope.launch {
+            webSocketServer.stopServer()
+        }
+    }
+    
+    /**
+     * Retorna o valor mínimo do array térmico
+     */
+    fun getThermalMinValue(): Float {
+        val thermalData = latestThermalData.value.first ?: return 0f
+        return thermalData.minOrNull() ?: 0f
+    }
+    
+    /**
+     * Retorna o valor máximo do array térmico
+     */
+    fun getThermalMaxValue(): Float {
+        val thermalData = latestThermalData.value.first ?: return 0f
+        return thermalData.maxOrNull() ?: 0f
+    }
+    
+    /**
+     * Retorna o valor médio do array térmico
+     */
+    fun getThermalAvgValue(): Float {
+        val thermalData = latestThermalData.value.first ?: return 0f
+        return thermalData.average().toFloat()
+    }
+    
+    // Limpa recursos ao destruir o ViewModel
+    override fun onCleared() {
+        super.onCleared()
+        webSocketServer.stopServer()
+    }
+}
