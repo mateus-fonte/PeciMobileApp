@@ -8,20 +8,20 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
-import android.os.Handler
-import android.os.Looper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.example.pecimobileapp.ui.navigation.AppNavigation
 import com.example.pecimobileapp.ui.theme.PeciMobileAppTheme
 import com.example.pecimobileapp.viewmodels.BluetoothViewModel
 import com.hivemq.client.mqtt.MqttClient
 import com.hivemq.client.mqtt.datatypes.MqttQos
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import java.nio.charset.StandardCharsets
 import java.util.*
 
@@ -33,7 +33,6 @@ class MainActivity : ComponentActivity() {
         bluetoothManager.adapter
     }
 
-    private val mqttHandler = Handler(Looper.getMainLooper())
     private val mqttClient = MqttClient.builder()
         .useMqttVersion3()
         .serverHost("48.217.187.110")
@@ -48,11 +47,7 @@ class MainActivity : ComponentActivity() {
         if (allGranted) {
             ensureBluetoothIsEnabled()
         } else {
-            Toast.makeText(
-                this,
-                "As permissões de Bluetooth são necessárias para o funcionamento do app",
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(this, "Permissões de Bluetooth são necessárias", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -62,11 +57,7 @@ class MainActivity : ComponentActivity() {
         if (result.resultCode == RESULT_OK) {
             bluetoothViewModel.updatePairedDevices()
         } else {
-            Toast.makeText(
-                this,
-                "Bluetooth é obrigatório para o funcionamento do app",
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(this, "Bluetooth é obrigatório", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -79,7 +70,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        connectAndSendDummyData()
+        connectToMqtt()
+        observeSensorData()
 
         if (bluetoothAdapter == null) {
             Toast.makeText(this, "Bluetooth não está disponível neste dispositivo", Toast.LENGTH_LONG).show()
@@ -124,52 +116,55 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun connectAndSendDummyData() {
+    private fun connectToMqtt() {
         try {
             mqttClient.connect()
-            startSendingDummyData()
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    private fun startSendingDummyData() {
-        mqttHandler.postDelayed(object : Runnable {
-            var bpm = 80
-            var temp = 36.5
-            val alunoId = "aluno01"
+    private fun observeSensorData() {
+        val groupId = "grupo1"
+        val exerciseId = "exercicio_teste"
+        val userUid = "teste123"
 
-            override fun run() {
-                val bpmVariation = (-2..2).random()
-                bpm = (bpm + bpmVariation).coerceIn(60, 100)
-                val tempVariation = listOf(-0.1, 0.0, 0.1).random()
-                temp = (temp + tempVariation).coerceIn(36.0, 38.0)
-                val timestamp = System.currentTimeMillis()
-
-                val ppgPayload = """{"ts":$timestamp,"id":"$alunoId","bpm":$bpm}"""
-                val swPayload = """{"ts":$timestamp,"id":"$alunoId","bpm":${bpm + 1}}"""
-                val camPayload = """{"ts":$timestamp,"id":"$alunoId","temp":$temp}"""
-
-                mqttClient.publishWith()
-                    .topic("/ppg/bpm")
-                    .payload(ppgPayload.toByteArray(StandardCharsets.UTF_8))
-                    .qos(MqttQos.AT_LEAST_ONCE)
-                    .send()
-
-                mqttClient.publishWith()
-                    .topic("/sw/bpm")
-                    .payload(swPayload.toByteArray(StandardCharsets.UTF_8))
-                    .qos(MqttQos.AT_LEAST_ONCE)
-                    .send()
-
-                mqttClient.publishWith()
-                    .topic("/cam/temp")
-                    .payload(camPayload.toByteArray(StandardCharsets.UTF_8))
-                    .qos(MqttQos.AT_LEAST_ONCE)
-                    .send()
-
-                mqttHandler.postDelayed(this, 2000)
+        lifecycleScope.launch {
+            bluetoothViewModel.bpm.collectLatest { value ->
+                value?.let {
+                    sendMqttPayload(groupId, exerciseId, userUid, "bpm", it)
+                }
             }
-        }, 2000)
+        }
+
+        lifecycleScope.launch {
+            bluetoothViewModel.thermalTemperature.collectLatest { value ->
+                value?.let {
+                    sendMqttPayload(groupId, exerciseId, userUid, "cam", it)
+                }
+            }
+        }
+    }
+
+    private fun sendMqttPayload(
+        groupId: String,
+        exerciseId: String,
+        userUid: String,
+        source: String,
+        value: Number
+    ) {
+        val timestamp = System.currentTimeMillis()
+        val topic = "/group/$groupId/data"
+        val payload = "{\"group_id\": \"$groupId\", \"exercise_id\": \"$exerciseId\", \"user_uid\": \"$userUid\", \"source\": \"$source\", \"value\": $value, \"timestamp\": $timestamp }"
+
+        try {
+            mqttClient.publishWith()
+                .topic(topic)
+                .payload(payload.toByteArray(StandardCharsets.UTF_8))
+                .qos(MqttQos.AT_LEAST_ONCE)
+                .send()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }

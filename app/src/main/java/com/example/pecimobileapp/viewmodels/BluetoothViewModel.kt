@@ -506,4 +506,8 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         data class Error(val message: String) : WifiResult()
         data class Pending(val message: String) : WifiResult()
     }
+    // Expor a temperatura média da câmera térmica
+    val thermalTemperature: StateFlow<Float?> get() = bleManager.avgTemp
+    val bpm: StateFlow<Int?> get() = bleManager.ppgHeartRate
+
 }
