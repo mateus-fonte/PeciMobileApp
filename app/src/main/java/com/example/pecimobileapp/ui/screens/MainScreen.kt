@@ -1,174 +1,123 @@
-// MainScreen.kt
 package com.example.pecimobileapp.ui.screens
 
-import android.annotation.SuppressLint
-import android.provider.Settings
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 @Composable
 fun MainScreen(
-    realTimeModel: RealTimeViewModel
+    viewModel: RealTimeViewModel
 ) {
-    // ➊ coleta os dados do BLE/ESP32
-    val sensorData by realTimeModel.realTimeData.collectAsState()
-    val isConnected by realTimeModel.isConnected.collectAsState()
+    // 1) Coleta dos valores
+    val hr        by viewModel.ppgHeartRate.collectAsState()
+    val avgTemp   by viewModel.avgTemp.collectAsState()
+    val maxTemp   by viewModel.maxTemp.collectAsState()
+    val minTemp   by viewModel.minTemp.collectAsState()
 
-    Box(
+    // 2) Estado de conexão
+    val isPpgConnected by viewModel.isPpgConnected.collectAsState()
+    val isCamConnected by viewModel.isCamConnected.collectAsState()
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary,
-                        MaterialTheme.colorScheme.secondary
-                    )
-                )
-            )
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Bom treino, Ciclista!",
-                style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
-                modifier = Modifier.fillMaxWidth()
-            )
+        Text("Bom treino, ciclista!", style = MaterialTheme.typography.headlineSmall)
 
-            Spacer(modifier = Modifier.height(24.dp))
+        Spacer(Modifier.height(24.dp))
 
-            if (isConnected) {
-                // ➋ exibe a frequência cardíaca
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Frequência Cardíaca", style = MaterialTheme.typography.titleMedium)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = sensorData?.heartRate?.let { "$it BPM" } ?: "-- BPM",
-                            style = MaterialTheme.typography.headlineLarge
-                        )
-                    }
-                }
-                /**
-                // ➌ exibe a temperatura média (se tiver)
-                sensorData?.averageTemperature?.let { temp ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text("Temperatura Média", style = MaterialTheme.typography.bodyMedium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("%.1f °C".format(temp), style = MaterialTheme.typography.headlineSmall)
-                        }
-                    }
-                }
-                **/
-
-                // ➍ seção de envio de configurações ao ESP32
-                ConfigSection(realTimeModel)
-
-            } else {
-                // se não estiver conectado
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Por favor, faça o setup dos sensores para iniciar o monitoramento.",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // você pode adicionar aqui outros cards ou resumos
-        }
-    }
-}
-
-@SuppressLint("HardwareIds")
-@Composable
-fun ConfigSection(
-    realTimeModel: RealTimeViewModel
-) {
-    val sent by realTimeModel.configSent.collectAsState()
-
-    val context = LocalContext.current
-    // ID único do dispositivo
-    val deviceId = Settings.Secure.getString(
-        context.contentResolver,
-        Settings.Secure.ANDROID_ID
-    )
-    if (!sent) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Button(
-                onClick = {
-                    // timestamp atual
-                    val now = System.currentTimeMillis()
-                    realTimeModel.sendTimeConfig(now)
-                    // modo fixo = 2
-                    realTimeModel.sendModeConfig(2)
-                    // envia o ID do aparelho
-                    realTimeModel.sendIdConfig(deviceId)
-                },
-                modifier = Modifier.fillMaxWidth()
+        // --- Card de Frequência Cardíaca ---
+        if (isPpgConnected) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
             ) {
-                Text(
-                    text = "Enviar Config",
-                    style = MaterialTheme.typography.titleMedium
-                )
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Frequência Cardíaca", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = hr?.let { "$it BPM" } ?: "-- BPM",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                }
             }
         }
-    }else {
-        Text("Configuração enviada com sucesso!", style = MaterialTheme.typography.bodyLarge)
+
+        Spacer(Modifier.height(24.dp))
+
+        // --- Cards de Temperatura ---
+        if (isCamConnected) {
+            // Média
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Temperatura Média", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = avgTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Máxima
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Temperatura Máxima", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = maxTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Mínima
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Temperatura Mínima", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = minTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                }
+            }
+        }
     }
 }
