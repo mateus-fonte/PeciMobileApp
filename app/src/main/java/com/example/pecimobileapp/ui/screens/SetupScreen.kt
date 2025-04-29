@@ -48,12 +48,13 @@ fun SetupScreen(
         Spacer(Modifier.height(32.dp))
 
         Button(
-            onClick = { navController.navigate("main") },
+            onClick = { navController.navigate("define_workout") },
             enabled = ready,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Iniciar Atividade Física")
         }
+
         if (!ready) {
             Spacer(Modifier.height(8.dp))
             Text(
