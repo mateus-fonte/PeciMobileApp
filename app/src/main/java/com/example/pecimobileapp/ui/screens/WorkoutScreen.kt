@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
-import com.example.pecimobileapp.ui.ProfileViewModel
+import com.example.pecimobileapp.viewmodels.ProfileViewModel
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 // Cores das zonas
