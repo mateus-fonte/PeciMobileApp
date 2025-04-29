@@ -44,9 +44,9 @@ fun WorkoutScreen(
     navController: NavController,
     selectedZone: Int,
     nickname: String,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    realTimeViewModel: RealTimeViewModel // <-- RECEBENDO AQUI
 ) {
-    val realTimeViewModel: RealTimeViewModel = viewModel()
     val profileViewModel: ProfileViewModel = viewModel()
 
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
@@ -90,7 +90,6 @@ fun WorkoutScreen(
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
-            // Controles superiores
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -116,7 +115,6 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Zona Atual
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -133,7 +131,6 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Temperatura e Frequência Cardíaca
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -144,7 +141,6 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Indicador de Zona
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -163,8 +159,7 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Execução 🎯
-            Text("Pontuação de Execução 🎯", style = MaterialTheme.typography.titleMedium)
+            Text("Pontuação de Execução 🏃‍♂️", style = MaterialTheme.typography.titleMedium)
             Text(
                 text = "${"%.0f".format(executionPercentage)}%",
                 modifier = Modifier.background(zoneColor).padding(8.dp)
@@ -172,7 +167,6 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Desempenho Individual
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.End
@@ -193,7 +187,6 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Dados ao Vivo (opcional)
             if (isPpgConnected) {
                 CardInfo(title = "Frequência Cardíaca", value = hr?.let { "$it BPM" } ?: "-- BPM")
             }

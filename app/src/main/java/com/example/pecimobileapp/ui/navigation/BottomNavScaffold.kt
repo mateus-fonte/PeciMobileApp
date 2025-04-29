@@ -115,31 +115,24 @@ fun BottomNavScaffold() {
                 modifier = Modifier.fillMaxSize()
             ) {
                 composable("setup") { SetupScreen(vm, navController) }
-
                 composable("main") { MainScreen(vm) }
-
                 composable("websocket") { WebSocketScreen(wsViewModel) }
-
                 composable("historico") {
                     HistoricoScreen(onBackClick = { navController.popBackStack() })
                 }
-
                 composable("profile") {
                     ProfileScreen(navToEdit = {
                         navController.navigate("profile_setup")
                     })
                 }
-
                 composable("profile_setup") {
                     ProfileSetupScreen(onSave = {
                         navController.popBackStack()
                     })
                 }
-
                 composable("define_workout") {
                     DefineWorkoutScreen(navController)
                 }
-
                 composable("workout/{zone}/{nickname}") { backStackEntry ->
                     val zone = backStackEntry.arguments?.getString("zone")?.toIntOrNull() ?: 1
                     val nickname = backStackEntry.arguments?.getString("nickname") ?: "Tu"
@@ -148,10 +141,10 @@ fun BottomNavScaffold() {
                         navController = navController,
                         selectedZone = zone,
                         nickname = nickname,
-                        onStop = { navController.popBackStack() }
+                        onStop = { navController.popBackStack() },
+                        realTimeViewModel = vm // <<<<<< PASSEI AQUI
                     )
                 }
-
                 composable("countdown") {
                     CountdownScreen(navController = navController)
                 }
