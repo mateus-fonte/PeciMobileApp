@@ -3,6 +3,7 @@ package com.example.pecimobileapp.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -15,9 +16,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import kotlinx.coroutines.delay
+import com.example.pecimobileapp.ui.ProfileViewModel
+import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
+// Cores das zonas
 val AerobicEndurance = Color(0xFF2196F3)
 val AerobicPower = Color(0xFF4CAF50)
 val Threshold = Color(0xFFFFEB3B)
@@ -39,19 +44,35 @@ fun WorkoutScreen(
     navController: NavController,
     selectedZone: Int,
     nickname: String,
-    heartRate: Int?,
-    temperature: Float?,
-    execution: Float?,
     onStop: () -> Unit
 ) {
+    val realTimeViewModel: RealTimeViewModel = viewModel()
+    val profileViewModel: ProfileViewModel = viewModel()
+
+    val hr by realTimeViewModel.ppgHeartRate.collectAsState()
+    val avgTemp by realTimeViewModel.avgTemp.collectAsState()
+    val isPpgConnected by realTimeViewModel.isPpgConnected.collectAsState()
+    val isCamConnected by realTimeViewModel.isCamConnected.collectAsState()
+
     val zoneColor = zoneColors[selectedZone] ?: NoZone
+
     var isRunning by remember { mutableStateOf(true) }
+    var timeInZone by remember { mutableStateOf(0) }
     var elapsedSeconds by remember { mutableStateOf(0) }
+    var executionPercentage by remember { mutableStateOf(0f) }
 
     LaunchedEffect(isRunning) {
         while (isRunning) {
             delay(1000L)
             elapsedSeconds++
+
+            if (hr != null && isHeartRateInZone(hr!!, selectedZone, profileViewModel)) {
+                timeInZone++
+            }
+
+            if (elapsedSeconds % 60 == 0) {
+                executionPercentage = (timeInZone.toFloat() / elapsedSeconds * 100)
+            }
         }
     }
 
@@ -64,7 +85,11 @@ fun WorkoutScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp)
+        ) {
             // Controles superiores
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -82,12 +107,16 @@ fun WorkoutScreen(
                         Icon(Icons.Default.Stop, contentDescription = "Parar")
                     }
                 }
-                Text(text = formattedTime, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = formattedTime,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Zona atual
+            // Zona Atual
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -95,54 +124,62 @@ fun WorkoutScreen(
                     .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "ZONE $selectedZone WORKOUT", fontWeight = FontWeight.Bold, color = Color.Black)
+                Text(
+                    text = "TREINO NA ZONA $selectedZone",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Temperatura e FC
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🌡️")
-                    Text("${temperature?.let { "%.1f°".format(it) } ?: "--.-°"}",
-                        modifier = Modifier.background(zoneColor).padding(8.dp))
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("❤️")
-                    Text("${heartRate?.let { "$it bpm" } ?: "--- bpm"}",
-                        modifier = Modifier.background(zoneColor).padding(8.dp))
-                }
+            // Temperatura e Frequência Cardíaca
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                MetricCard(label = "🌡️", value = avgTemp?.let { "%.1f°".format(it) } ?: "--.-°", color = zoneColor)
+                MetricCard(label = "❤️", value = hr?.let { "$it bpm" } ?: "--- bpm", color = zoneColor)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Indicador de zona (barras)
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                for (i in 1..6) {
+            // Indicador de Zona
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                for (i in 1..5) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(20.dp)
                             .padding(vertical = 2.dp)
                             .background(if (selectedZone == i) zoneColors[i]!! else Color.LightGray)
-                    ) {}
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Execução
-            Text("Execução:", style = MaterialTheme.typography.titleMedium)
-            Text("${execution?.let { "%.0f%%".format(it) } ?: "--- %"}",
-                modifier = Modifier.background(zoneColor).padding(8.dp))
+            // Execução 🎯
+            Text("Pontuação de Execução 🎯", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "${"%.0f".format(executionPercentage)}%",
+                modifier = Modifier.background(zoneColor).padding(8.dp)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Indicador pessoal
-            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+            // Desempenho Individual
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.End
+            ) {
                 Text("DESEMPENHO", fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("VOCÊ")
+                    Text("TU")
                     Box(
                         modifier = Modifier
                             .size(32.dp)
@@ -153,6 +190,55 @@ fun WorkoutScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Dados ao Vivo (opcional)
+            if (isPpgConnected) {
+                CardInfo(title = "Frequência Cardíaca", value = hr?.let { "$it BPM" } ?: "-- BPM")
+            }
+            if (isCamConnected) {
+                CardInfo(title = "Temperatura Média", value = avgTemp?.let { "%.1f°C".format(it) } ?: "--.-°C")
+            }
         }
     }
+}
+
+@Composable
+fun MetricCard(label: String, value: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label)
+        Text(
+            value,
+            modifier = Modifier
+                .background(color)
+                .padding(8.dp)
+        )
+    }
+}
+
+@Composable
+fun CardInfo(title: String, value: String) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            Text(value, style = MaterialTheme.typography.headlineLarge)
+        }
+    }
+}
+
+fun isHeartRateInZone(heartRate: Int, selectedZone: Int, profileViewModel: ProfileViewModel): Boolean {
+    val zonas = profileViewModel.zonas
+    val faixa = zonas.getOrNull(selectedZone - 1)?.second
+    return faixa?.contains(heartRate) == true
 }
