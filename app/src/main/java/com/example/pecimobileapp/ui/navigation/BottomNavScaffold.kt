@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.WifiTethering
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.ui.screens.WorkoutScreen
+import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 
 
 
@@ -29,6 +31,8 @@ fun BottomNavScaffold() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val vm: RealTimeViewModel = viewModel()
+    val wsViewModel: WebSocketViewModel = viewModel()
 
     val realTimeModel: RealTimeViewModel = viewModel()
 
@@ -79,6 +83,18 @@ fun BottomNavScaffold() {
                     )
                 )
                 NavigationBarItem(
+                    icon = { Icon(Icons.Default.WifiTethering, contentDescription = "ESP32") },
+                    label = { Text("ESP32") },
+                    selected = currentRoute == "websocket",
+                    onClick = { navController.navigate("websocket") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color.White,
+                        unselectedIconColor = Color.LightGray,
+                        selectedTextColor = Color.White,
+                        unselectedTextColor = Color.LightGray
+                    )
+                )
+                NavigationBarItem(
                     icon = { Icon(Icons.Default.Star, contentDescription = "Histórico") },
                     label = { Text("Histórico") },
                     selected = currentRoute == "historico",
@@ -103,15 +119,12 @@ fun BottomNavScaffold() {
                 startDestination = "main",
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable("main") {
-                    MainScreen(realTimeModel = realTimeModel)
-                }
-                composable("setup") {
-                    SetupScreen(
-                        realTimeModel = realTimeModel,
-                        navController = navController
-                    )
-                }
+                composable("setup") { SetupScreen(vm, navController) }
+
+                composable("main")  { MainScreen(vm) }
+
+                composable("websocket") { WebSocketScreen(wsViewModel) }
+
                 composable("historico") {
                     HistoricoScreen(onBackClick = { navController.popBackStack() })
                 }

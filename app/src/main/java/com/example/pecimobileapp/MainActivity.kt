@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
@@ -28,7 +29,7 @@ class MainActivity : ComponentActivity() {
     private val bluetoothViewModel: BluetoothViewModel by viewModels()
 
     private val bluetoothAdapter: BluetoothAdapter? by lazy {
-        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothManager.adapter
     }
 

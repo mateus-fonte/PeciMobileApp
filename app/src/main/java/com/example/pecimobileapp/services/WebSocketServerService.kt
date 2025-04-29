@@ -1,0 +1,286 @@
+package com.example.pecimobileapp.services
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.wifi.WifiManager
+import android.util.Log
+import com.example.pecimobileapp.models.WebSocketData
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import org.java_websocket.WebSocket
+import org.java_websocket.handshake.ClientHandshake
+import org.java_websocket.server.WebSocketServer
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.NetworkInterface
+import java.nio.ByteBuffer
+import java.util.*
+import kotlin.concurrent.thread
+
+/**
+ * Serviço que implementa um servidor WebSocket para receber dados do ESP32-CAM
+ */
+class WebSocketServerService(private val context: Context) {
+    
+    // Porta padrão para o servidor WebSocket
+    private val DEFAULT_PORT = 8080
+    private var port = DEFAULT_PORT
+    private var server: ESPWebSocketServer? = null
+    
+    // Para observar o estado da conexão
+    private val _isRunning = MutableStateFlow(false)
+    val isRunning: StateFlow<Boolean> = _isRunning
+    
+    // Para armazenar os dados mais recentes
+    private val _latestCameraImage = MutableStateFlow<Pair<Bitmap?, String>>(Pair(null, ""))
+    val latestCameraImage: StateFlow<Pair<Bitmap?, String>> = _latestCameraImage
+    
+    private val _latestThermalData = MutableStateFlow<Pair<FloatArray?, String>>(Pair(null, ""))
+    val latestThermalData: StateFlow<Pair<FloatArray?, String>> = _latestThermalData
+    
+    // Métricas de conexão
+    private val _connectionStats = MutableStateFlow(ConnectionStats())
+    val connectionStats: StateFlow<ConnectionStats> = _connectionStats
+    
+    // Classe para manter estatísticas de conexão
+    data class ConnectionStats(
+        val clientsCount: Int = 0,
+        val receivedMessages: Int = 0,
+        val serverAddress: String = "",
+        val allNetworkIPs: List<String> = listOf()
+    )
+    
+    /**
+     * Inicia o servidor WebSocket
+     */
+    fun startServer(port: Int = DEFAULT_PORT): Boolean {
+        if (_isRunning.value) {
+            Log.d(TAG, "O servidor já está em execução na porta $port")
+            return true
+        }
+        
+        this.port = port
+        
+        try {
+            server = ESPWebSocketServer(InetSocketAddress(port))
+            
+            // Iniciar o servidor em uma thread separada
+            thread(start = true) {
+                server?.start()
+            }
+            
+            val serverIP = getIpAddresses()
+            Log.d(TAG, "Servidor iniciado em $serverIP:$port")
+            
+            _isRunning.value = true
+            _connectionStats.value = _connectionStats.value.copy(
+                serverAddress = "$serverIP:$port",
+                allNetworkIPs = getAllIpAddresses()
+            )
+            
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao iniciar o servidor WebSocket", e)
+            return false
+        }
+    }
+    
+    /**
+     * Para o servidor WebSocket
+     */
+    fun stopServer() {
+        if (!_isRunning.value) {
+            Log.d(TAG, "O servidor já está parado")
+            return
+        }
+        
+        try {
+            server?.stop()
+            server = null
+            _isRunning.value = false
+            Log.d(TAG, "Servidor WebSocket parado")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao parar o servidor WebSocket", e)
+        }
+    }
+    
+    /**
+     * Obtém o endereço IP do dispositivo (WiFi)
+     */
+    private fun getIpAddresses(): String {
+        try {
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val ipAddress = wifiManager.connectionInfo.ipAddress
+            
+            if (ipAddress != 0) {
+                return String.format(
+                    Locale.getDefault(),
+                    "%d.%d.%d.%d",
+                    ipAddress and 0xff,
+                    ipAddress shr 8 and 0xff,
+                    ipAddress shr 16 and 0xff,
+                    ipAddress shr 24 and 0xff
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao obter endereço IP via WifiManager", e)
+        }
+        
+        // Fallback: tentar obter o IP por NetworkInterface
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isUp && !networkInterface.isLoopback && 
+                        (networkInterface.name.startsWith("wlan") || networkInterface.name.startsWith("eth"))) {
+                    val addresses = networkInterface.inetAddresses
+                    while (addresses.hasMoreElements()) {
+                        val address = addresses.nextElement()
+                        if (!address.isLoopbackAddress && address is InetAddress && 
+                                address.hostAddress.indexOf(':') < 0) { // Filtra IPv6
+                            return address.hostAddress
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao obter endereço IP alternativo", e)
+        }
+        
+        return "127.0.0.1" // IP localhost como último recurso
+    }
+    
+    /**
+     * Obtém todos os endereços IP do dispositivo (WiFi, hotspot, etc.)
+     */
+    private fun getAllIpAddresses(): List<String> {
+        val result = mutableListOf<String>()
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isUp && !networkInterface.isLoopback) {
+                    val addresses = networkInterface.inetAddresses
+                    while (addresses.hasMoreElements()) {
+                        val address = addresses.nextElement()
+                        if (!address.isLoopbackAddress && address is InetAddress) {
+                            result.add(address.hostAddress + " (" + networkInterface.displayName + ")")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao obter endereços IP", e)
+        }
+        return result
+    }
+    
+    /**
+     * Implementação do servidor WebSocket
+     */
+    inner class ESPWebSocketServer(address: InetSocketAddress) : WebSocketServer(address) {
+        
+        init {
+            // Configurações para tornar o servidor mais estável
+            connectionLostTimeout = 60  // Aumenta o timeout para 60 segundos
+        }
+        
+        override fun onOpen(conn: WebSocket, handshake: ClientHandshake) {
+            Log.d(TAG, "Nova conexão: ${conn.remoteSocketAddress}")
+            
+            // Envia uma mensagem de confirmação para o cliente
+            try {
+                conn.send("CONNECTED")
+                Log.d(TAG, "Enviado CONNECTED para ${conn.remoteSocketAddress}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao enviar confirmação", e)
+            }
+            
+            _connectionStats.value = _connectionStats.value.copy(
+                clientsCount = connections.size
+            )
+        }
+        
+        override fun onClose(conn: WebSocket, code: Int, reason: String, remote: Boolean) {
+            Log.d(TAG, "Conexão fechada: ${conn.remoteSocketAddress}, código: $code, razão: $reason, remoto: $remote")
+            _connectionStats.value = _connectionStats.value.copy(
+                clientsCount = connections.size
+            )
+        }
+        
+        override fun onMessage(conn: WebSocket, message: String) {
+            Log.d(TAG, "Mensagem de texto recebida de ${conn.remoteSocketAddress}: $message")
+            _connectionStats.value = _connectionStats.value.copy(
+                receivedMessages = _connectionStats.value.receivedMessages + 1
+            )
+            
+            // Confirmação para mensagens de texto
+            try {
+                conn.send("RECEIVED_TEXT")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao enviar confirmação de texto", e)
+            }
+        }
+        
+        override fun onMessage(conn: WebSocket, message: ByteBuffer) {
+            Log.d(TAG, "Dados binários recebidos de ${conn.remoteSocketAddress}, tamanho: ${message.remaining()} bytes")
+            
+            _connectionStats.value = _connectionStats.value.copy(
+                receivedMessages = _connectionStats.value.receivedMessages + 1
+            )
+            
+            try {
+                val byteArray = ByteArray(message.remaining())
+                message.get(byteArray)
+                
+                // Processar os dados binários recebidos
+                processReceivedData(byteArray)
+                
+                // Confirmação para mensagens binárias
+                conn.send("RECEIVED_BINARY")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao processar mensagem binária", e)
+            }
+        }
+        
+        override fun onError(conn: WebSocket?, ex: Exception) {
+            Log.e(TAG, "Erro na conexão WebSocket ${conn?.remoteSocketAddress}", ex)
+        }
+        
+        override fun onStart() {
+            Log.d(TAG, "Servidor WebSocket iniciado na porta $port")
+            setConnectionLostTimeout(60);
+        }
+    }
+    
+    /**
+     * Processa os dados binários recebidos via WebSocket
+     */
+    private fun processReceivedData(data: ByteArray) {
+        try {
+            val wsData = WebSocketData.parseFromBinary(data) ?: return
+            
+            Log.d(TAG, "Dados recebidos: tipo=${wsData.type}, timestamp=${wsData.getFormattedTimestamp()}")
+            
+            when (wsData.type) {
+                WebSocketData.DataType.CAMERA_IMAGE -> {
+                    val imageBytes = wsData.data as ByteArray
+                    val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                    _latestCameraImage.value = Pair(bitmap, wsData.getFormattedTimestamp())
+                }
+                
+                WebSocketData.DataType.THERMAL_DATA -> {
+                    val thermalData = wsData.data as FloatArray
+                    _latestThermalData.value = Pair(thermalData, wsData.getFormattedTimestamp())
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao processar dados binários", e)
+        }
+    }
+    
+    companion object {
+        private const val TAG = "WebSocketServerService"
+    }
+}
