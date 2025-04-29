@@ -2,7 +2,8 @@ package com.example.pecimobileapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
@@ -44,9 +45,9 @@ fun WorkoutScreen(
     navController: NavController,
     selectedZone: Int,
     nickname: String,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    realTimeViewModel: RealTimeViewModel
 ) {
-    val realTimeViewModel: RealTimeViewModel = viewModel()
     val profileViewModel: ProfileViewModel = viewModel()
 
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
@@ -60,6 +61,19 @@ fun WorkoutScreen(
     var timeInZone by remember { mutableStateOf(0) }
     var elapsedSeconds by remember { mutableStateOf(0) }
     var executionPercentage by remember { mutableStateOf(0f) }
+
+    val zonas = profileViewModel.zonas
+    val currentZone = remember(hr) {
+        hr?.let { bpm ->
+            zonas.indexOfFirst { bpm in it.second }.let {
+                when {
+                    it == -1 && bpm < zonas.first().second.first -> 0
+                    it == -1 && bpm > zonas.last().second.last -> 5
+                    else -> it + 1
+                }
+            }
+        } ?: 0
+    }
 
     LaunchedEffect(isRunning) {
         while (isRunning) {
@@ -81,6 +95,8 @@ fun WorkoutScreen(
     val seconds = elapsedSeconds % 60
     val formattedTime = String.format("%02d:%02d:%02d", hours, minutes, seconds)
 
+    val scrollState = rememberScrollState()
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -88,9 +104,9 @@ fun WorkoutScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(scrollState)
                 .padding(8.dp)
         ) {
-            // Controles superiores
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -116,7 +132,6 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Zona Atual
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -133,72 +148,35 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Temperatura e Frequência Cardíaca
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                MetricCard(label = "🌡️", value = avgTemp?.let { "%.1f°".format(it) } ?: "--.-°", color = zoneColor)
-                MetricCard(label = "❤️", value = hr?.let { "$it bpm" } ?: "--- bpm", color = zoneColor)
+            // Barras todas na cor da zona atual
+            val currentColor = zoneColors[currentZone] ?: NoZone
+            repeat(5) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(20.dp)
+                        .padding(vertical = 2.dp)
+                        .background(currentColor)
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Indicador de Zona
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-            ) {
-                for (i in 1..5) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(20.dp)
-                            .padding(vertical = 2.dp)
-                            .background(if (selectedZone == i) zoneColors[i]!! else Color.LightGray)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Execução 🎯
             Text("Pontuação de Execução 🎯", style = MaterialTheme.typography.titleMedium)
             Text(
                 text = "${"%.0f".format(executionPercentage)}%",
-                modifier = Modifier.background(zoneColor).padding(8.dp)
+                modifier = Modifier
+                    .background(zoneColor)
+                    .padding(8.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Desempenho Individual
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.End
-            ) {
-                Text("DESEMPENHO", fontWeight = FontWeight.Bold)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("TU")
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .background(zoneColor, shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("✓")
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Dados ao Vivo (opcional)
             if (isPpgConnected) {
-                CardInfo(title = "Frequência Cardíaca", value = hr?.let { "$it BPM" } ?: "-- BPM")
+                CardInfo(title = "💗 Frequência Cardíaca: ", value = hr?.let { "$it BPM" } ?: "-- BPM")
             }
             if (isCamConnected) {
-                CardInfo(title = "Temperatura Média", value = avgTemp?.let { "%.1f°C".format(it) } ?: "--.-°C")
+                CardInfo(title = "🌡️ Temperatura Média: ", value = avgTemp?.let { "%.1f°C".format(it) } ?: "--.-°C")
             }
         }
     }
