@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
     private val blePpg = BleManager(app)
     private val bleCam = BleManager(app)
+    private val bleManager = BleManager(app)
 
     // 1) Resultados de scan separados
     val scanResultsPpg: StateFlow<List<ScanResult>> = blePpg.scanResults
@@ -39,4 +40,8 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startCamScan()           = viewModelScope.launch { bleCam.startScan() }
     fun connectCam(device: BluetoothDevice) = viewModelScope.launch { bleCam.connectCam(device) }
+
+    fun sendTimeConfig(ts: Long)   = viewModelScope.launch { bleManager.sendTimeConfig(ts) }
+    fun sendModeConfig(mode: Int)  = viewModelScope.launch { bleManager.sendModeConfig(mode) }
+    fun sendIdConfig(id: String)   = viewModelScope.launch { bleManager.sendIdConfig(id) }
 }

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 import java.io.FileWriter
 import java.io.IOException
+import java.nio.ByteBuffer
 import java.util.*
 
 private val HR_SERVICE_UUID        = UUID.fromString("e626a696-36ba-45b3-a444-5c28eb674dd5")
@@ -30,7 +31,15 @@ private val SENSOR_DATA3_UUID      = UUID.fromString("853f9ba1-94aa-4124-92ff-5a
 
 private val CLIENT_CFG_UUID        = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
+// dentro de BleManager.kt, no topo
+private val TIME_UUID = UUID.fromString("ca68ebcd-a0e5-4174-896d-15ba005b668e")
+private val MODE_UUID = UUID.fromString("0b5a208c-b1df-4d3d-b188-6a50268ac8c8")
+private val ID_UUID   = UUID.fromString("eee66a40-0189-4dff-9310-b5736f86ee9c")
+
+
 class BleManager(private val context: Context) {
+
+    private var bluetoothGatt: BluetoothGatt? = null
     private val TAG = "BleManager"
 
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -197,6 +206,42 @@ class BleManager(private val context: Context) {
             }
         })
     }
+
+    @SuppressLint("MissingPermission")
+    private fun writeConfig(uuid: UUID, data: ByteArray) {
+        val gatt = bluetoothGatt ?: run {
+            Toast.makeText(context, "Não conectado ao BLE", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val chr = gatt.services
+            .asSequence()
+            .flatMap { it.characteristics.asSequence() }
+            .firstOrNull { it.uuid == uuid }
+            ?: run {
+                Toast.makeText(context, "Characteristic $uuid não encontrada", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+        chr.value = data
+        gatt.writeCharacteristic(chr)
+    }
+
+    /** Envia 8 bytes de timestamp (Long) */
+    fun sendTimeConfig(ts: Long) {
+        val buf = ByteBuffer.allocate(Long.SIZE_BYTES).putLong(ts).array()
+        writeConfig(TIME_UUID, buf)
+    }
+
+    /** Envia 1 byte de modo */
+    fun sendModeConfig(mode: Int) {
+        writeConfig(MODE_UUID, byteArrayOf(mode.toByte()))
+    }
+
+    /** Envia string UTF-8 do ID */
+    fun sendIdConfig(id: String) {
+        writeConfig(ID_UUID, id.toByteArray(Charsets.UTF_8))
+    }
+
 
     /** Chamadas públicas */
     fun connectPpg(device: BluetoothDevice) = connect(device)
