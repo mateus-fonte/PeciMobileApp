@@ -1,5 +1,4 @@
-package com.example.pecimobileapp.ui.screens
-
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -7,8 +6,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import com.example.pecimobileapp.ui.*
 
 @Composable
@@ -17,8 +21,11 @@ fun DefineWorkoutScreen(navController: NavController) {
 
     var selectedZone by remember { mutableStateOf(1) }
     var dropdownExpanded by remember { mutableStateOf(false) }
+    var tipoTreino by remember { mutableStateOf("Individual") }
+    var nomeGrupo by remember { mutableStateOf("") }
 
     val zonas = profileViewModel.zonas
+    val scrollState = rememberScrollState()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -27,12 +34,40 @@ fun DefineWorkoutScreen(navController: NavController) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(scrollState)
+                .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text("Definir Treino", style = MaterialTheme.typography.headlineMedium)
 
+            // Seletor Individual ou Grupo
+            Text("Tipo de treino", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                listOf("Individual", "Em grupo").forEach { tipo ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(
+                            selected = tipoTreino == tipo,
+                            onClick = { tipoTreino = tipo }
+                        )
+                        Text(tipo)
+                    }
+                }
+            }
+
+            // Campo para nome do grupo, só se for em grupo
+            if (tipoTreino == "Em grupo") {
+                OutlinedTextField(
+                    value = nomeGrupo,
+                    onValueChange = {
+                        if (it.length <= 10) nomeGrupo = it
+                    },
+                    label = { Text("Nome do grupo (máx. 10 carateres)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+
+            // Zona de BPM
             Text("Meta de BPM", style = MaterialTheme.typography.titleMedium)
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
@@ -63,7 +98,8 @@ fun DefineWorkoutScreen(navController: NavController) {
 
             Button(
                 onClick = {
-                   navController.navigate("workout/${selectedZone}/${profileViewModel.apelido}")
+                    val apelido = if (tipoTreino == "Em grupo") nomeGrupo else profileViewModel.apelido
+                    navController.navigate("workout/${selectedZone}/$apelido")
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
