@@ -3,37 +3,55 @@ package com.example.pecimobileapp.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 @Composable
-fun ConfigSection(realTimeModel: RealTimeViewModel) {
-    // Gera valores automaticamente
-    val timestamp = remember { System.currentTimeMillis() }
-    val mode = 2
-    val id   = remember { java.util.UUID.randomUUID().toString() }
+fun ConfigSection(viewModel: RealTimeViewModel) {
+    val serverIp by viewModel.serverAddress.collectAsState()
+    var ssid by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var sent by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         if (!sent) {
-            Text("Timestamp: $timestamp")
-            Text("Mode: $mode")
-            Text("ID: $id")
+            Text("Servidor WS: $serverIp")
             Spacer(Modifier.height(12.dp))
-            Button(onClick = {
-                realTimeModel.sendTimeConfig(timestamp)
-                realTimeModel.sendModeConfig(mode)
-                realTimeModel.sendIdConfig(id)
-                sent = true
-            }, Modifier.fillMaxWidth()) {
-                Text("Enviar Configurações")
+
+            OutlinedTextField(
+                value = ssid,
+                onValueChange = { ssid = it },
+                label = { Text("SSID da Rede Wi-Fi") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Senha da Rede Wi-Fi") },
+                modifier = Modifier.fillMaxWidth(),
+                visualTransformation = PasswordVisualTransformation()
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    viewModel.sendAllConfigs(ssid, password)
+                    sent = true
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Enviar Configurações de Rede")
             }
         } else {
-            Text("✓ Configurações enviadas!", color = Color(0xFF4CAF50))
+            Text(
+                "✓ Configurações de rede enviadas!",
+                color = Color(0xFF4CAF50),
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
     }
 }
-

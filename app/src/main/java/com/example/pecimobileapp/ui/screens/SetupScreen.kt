@@ -12,7 +12,7 @@ import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 @Composable
 fun SetupScreen(
-    viewModel    : RealTimeViewModel,
+    viewModel: RealTimeViewModel,
     navController: NavController
 ) {
     val ppgResults   by viewModel.scanResultsPpg.collectAsState()
@@ -45,7 +45,15 @@ fun SetupScreen(
             onConnect   = { viewModel.connectCam(it) }
         )
 
-        ConfigSection(viewModel)
+        if (camConnected) {
+            ConfigSection(viewModel)
+        } else {
+            Text(
+                "Conecte a câmera térmica para habilitar configurações",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
 
         Spacer(Modifier.height(32.dp))
 
@@ -55,14 +63,6 @@ fun SetupScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Iniciar Atividade Física")
-        }
-
-        if (!ready) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Conecte ambos os dispositivos para prosseguir",
-                color = MaterialTheme.colorScheme.error
-            )
         }
     }
 }
