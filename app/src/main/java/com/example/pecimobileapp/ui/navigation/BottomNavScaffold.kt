@@ -1,5 +1,6 @@
 package com.example.pecimobileapp.ui.navigation
 
+import DefineWorkoutScreen
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -8,16 +9,13 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.WifiTethering
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
+import com.example.pecimobileapp.network.MqttManagerImpl
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
@@ -30,6 +28,7 @@ fun BottomNavScaffold() {
     val currentRoute = navBackStackEntry?.destination?.route
     val vm: RealTimeViewModel = viewModel()
     val wsViewModel: WebSocketViewModel = viewModel()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -133,16 +132,21 @@ fun BottomNavScaffold() {
                 composable("define_workout") {
                     DefineWorkoutScreen(navController)
                 }
-                composable("workout/{zone}/{nickname}") { backStackEntry ->
+                composable("workout/{zone}?group={group}") { backStackEntry ->
                     val zone = backStackEntry.arguments?.getString("zone")?.toIntOrNull() ?: 1
-                    val nickname = backStackEntry.arguments?.getString("nickname") ?: "Tu"
+                    val isGroup = backStackEntry.arguments?.getString("group")?.toBoolean() ?: false
+
+                    val mqttManager = remember(isGroup) {
+                        if (isGroup) MqttManagerImpl(context) else null
+                    }
 
                     WorkoutScreen(
                         navController = navController,
                         selectedZone = zone,
-                        nickname = nickname,
+                        isGroup = isGroup,
+                        mqttManager = mqttManager,
                         onStop = { navController.popBackStack() },
-                        realTimeViewModel = vm // <<<<<< PASSEI AQUI
+                        realTimeViewModel = vm
                     )
                 }
                 composable("countdown") {
