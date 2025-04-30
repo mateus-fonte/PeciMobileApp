@@ -51,6 +51,9 @@ android {
 }
 
 dependencies {
+
+
+
     implementation("androidx.compose.material:material-icons-extended:1.5.4")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -64,7 +67,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.appcompat)
     //implementation(libs.opencv.android)
-
+    implementation ("androidx.compose.foundation:foundation:1.6.0")
     // WebSocket e processamento de imagens
     implementation("org.java-websocket:Java-WebSocket:1.5.3")
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
@@ -77,6 +80,10 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+
+
+
 //implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.4'
     //implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
     //implementation(libs.opencv.img)
