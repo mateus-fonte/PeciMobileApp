@@ -45,6 +45,8 @@ fun SetupScreen(
             onConnect   = { viewModel.connectCam(it) }
         )
 
+        ConfigSection(viewModel)
+
         Spacer(Modifier.height(32.dp))
 
         Button(
