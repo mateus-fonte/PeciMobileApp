@@ -98,8 +98,10 @@ fun DefineWorkoutScreen(navController: NavController) {
 
             Button(
                 onClick = {
-                    val apelido = if (tipoTreino == "Em grupo") nomeGrupo else profileViewModel.apelido
-                    navController.navigate("workout/${selectedZone}/$apelido")
+                    if (tipoTreino == "Em grupo") {
+                        profileViewModel.identificador = nomeGrupo
+                    }
+                    navController.navigate("workout/${selectedZone}/${profileViewModel.identificador}")
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
