@@ -18,7 +18,6 @@ import com.example.pecimobileapp.ui.theme.*
 import androidx.compose.foundation.rememberScrollState
 import com.example.pecimobileapp.viewmodels.*
 
-
 fun encodeBase62(number: Long): String {
     val chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     var num = number
@@ -169,8 +168,16 @@ fun DefineWorkoutScreen(navController: NavController) {
                 ) {
                     Text("Criar grupo")
                 }
-            }
 
+                if (groupFullName.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Nome oficial do grupo: $groupFullName",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
