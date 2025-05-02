@@ -8,20 +8,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
+import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 
 @Composable
 fun MainScreen(
-    viewModel: RealTimeViewModel
+    viewModel: RealTimeViewModel,
+    wsViewModel: WebSocketViewModel
 ) {
     // 1) Coleta dos valores
     val hr        by viewModel.ppgHeartRate.collectAsState()
-    val avgTemp   by viewModel.avgTemp.collectAsState()
-    val maxTemp   by viewModel.maxTemp.collectAsState()
-    val minTemp   by viewModel.minTemp.collectAsState()
-
-    // 2) Estado de conexão
     val isPpgConnected by viewModel.isPpgConnected.collectAsState()
-    val isCamConnected by viewModel.isCamConnected.collectAsState()
+    val useBle        by viewModel.isCamConnected.collectAsState()
+    val useWs         by wsViewModel.isWsConnected.collectAsState()
+    val avgTemp       by viewModel.avgTemp.collectAsState()
+    val maxTemp       by viewModel.maxTemp.collectAsState()
+    val minTemp       by viewModel.minTemp.collectAsState()
+    val avgTempWs     by wsViewModel.avgThermalFlow.collectAsState()
+    //val maxTempWs     by wsViewModel.maxThermalFlow.collectAsState()
+    //val minTempWs     by wsViewModel.minThermalFlow.collectAsState()
 
     Column(
         modifier = Modifier
@@ -57,7 +61,7 @@ fun MainScreen(
         Spacer(Modifier.height(24.dp))
 
         // --- Cards de Temperatura ---
-        if (isCamConnected) {
+        if (useBle) {
             // Média
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -114,6 +118,24 @@ fun MainScreen(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = minTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                        style = MaterialTheme.typography.headlineLarge
+                    )
+                }
+            }
+        } else if (useWs){
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Temperatura Média via WS", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = avgTempWs?.let { "%.1f °C".format(it) } ?: "-- °C",
                         style = MaterialTheme.typography.headlineLarge
                     )
                 }
