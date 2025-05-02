@@ -200,9 +200,30 @@ fun WorkoutScreen(
                     .padding(8.dp)
             )
 
-            if (isGroup && position > 0) {
+            // SOMENTE MOSTRAR SE FOR GRUPO
+            if (isGroup) {
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("🏆 Estás em ${position}º lugar!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Column {
+                    Text(
+                        text = "👥 Grupo: ${groupName ?: "Desconhecido"}",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    if (position > 0) {
+                        Text(
+                            text = "🏆 Estás em ${position}º lugar!",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            text = "⏳ A aguardar resultados para o ranking...",
+                            fontSize = 16.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
