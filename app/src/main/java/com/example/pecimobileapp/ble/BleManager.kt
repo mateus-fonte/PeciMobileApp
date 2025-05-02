@@ -15,6 +15,9 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.io.File
+import java.io.FileWriter
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.*
 
@@ -184,18 +187,22 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
                 val afterDot = raw.substringAfter('.', "")
                 val digits = afterDot.filter(Char::isDigit)
                 _ppgHeartRate.value = digits.toIntOrNull()
+                saveToFile(raw)
             }
             SENSOR_DATA1_UUID -> {
                 val frac = raw.substringAfter('.', "0").filter(Char::isDigit)
                 _avgTemp.value = frac.toIntOrNull()?.div(100f)
+                saveToFile(raw)
             }
             SENSOR_DATA2_UUID -> {
                 val frac = raw.substringAfter('.', "0").filter(Char::isDigit)
                 _maxTemp.value = frac.toIntOrNull()?.div(100f)
+                saveToFile(raw)
             }
             SENSOR_DATA3_UUID -> {
                 val frac = raw.substringAfter('.', "0").filter(Char::isDigit)
                 _minTemp.value = frac.toIntOrNull()?.div(100f)
+                saveToFile(raw)
             }
         }
     }
@@ -263,6 +270,20 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         } else {
             // se desencontrou, limpa tudo
             writeQueue.clear()
+        }
+    }
+
+    private fun saveToFile(data: String) {
+        try {
+            val path = context.getExternalFilesDir(null) ?: context.filesDir
+            val file = File(path, "bpm_log.txt")
+            val writer = FileWriter(file, true)
+            writer.append(data).append("\n")
+            writer.flush()
+            writer.close()
+            Log.d(TAG, "Salvo no arquivo: $data no caminho: ${file.absolutePath}")
+        } catch (e: IOException) {
+            Log.e(TAG, "Erro ao salvar no arquivo", e)
         }
     }
 }
