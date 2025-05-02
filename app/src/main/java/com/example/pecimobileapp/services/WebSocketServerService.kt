@@ -35,9 +35,6 @@ class WebSocketServerService(private val context: Context) {
             OpenCVUtils(context)
     }
     
-            OpenCVUtils(context)
-    }
-    
     // Para observar o estado da conexão
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning
