@@ -9,6 +9,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
+/**
+ * Seção de configuração da REDE WI-FI da CÂMERA TÉRMICA.
+ * Envia SSID e senha via BLE para que a câmera possa conectar via WebSocket.
+ */
 @Composable
 fun ConfigSection(viewModel: RealTimeViewModel) {
     val apIp by viewModel.accessPointIp.collectAsState()
@@ -18,15 +22,18 @@ fun ConfigSection(viewModel: RealTimeViewModel) {
 
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         if (!sent) {
-            Text("IP do Servidor (AP):", style = MaterialTheme.typography.bodyMedium)
+            Text("IP da Câmera Térmica (modo AP):", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(4.dp))
-            Text(apIp.ifEmpty { "-- sem IP encontrado --" },
-                style = MaterialTheme.typography.bodyLarge)
+            Text(
+                apIp.ifEmpty { "-- sem IP encontrado --" },
+                style = MaterialTheme.typography.bodyLarge
+            )
 
+            Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = ssid,
                 onValueChange = { ssid = it },
-                label = { Text("SSID da Rede Wi-Fi") },
+                label = { Text("SSID da Rede Wi-Fi da Câmera") },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(8.dp))
@@ -39,6 +46,7 @@ fun ConfigSection(viewModel: RealTimeViewModel) {
                 visualTransformation = PasswordVisualTransformation()
             )
             Spacer(Modifier.height(16.dp))
+
             Button(
                 onClick = {
                     viewModel.sendAllConfigs(ssid, password)
@@ -46,11 +54,11 @@ fun ConfigSection(viewModel: RealTimeViewModel) {
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Enviar Configurações de Rede")
+                Text("Enviar Configurações para a Câmera")
             }
         } else {
             Text(
-                "✓ Configurações de rede enviadas!",
+                "✓ Configurações de rede da câmera enviadas com sucesso!",
                 color = Color(0xFF4CAF50),
                 style = MaterialTheme.typography.bodyLarge
             )
