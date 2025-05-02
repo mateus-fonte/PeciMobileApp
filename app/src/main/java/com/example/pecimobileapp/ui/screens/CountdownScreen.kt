@@ -20,7 +20,7 @@ fun CountdownScreen(
         }
     }
 ) {
-    var counter by remember { mutableStateOf(5) }
+    var counter by remember { mutableStateOf(3) }
 
     // Inicia contagem regressiva
     LaunchedEffect(Unit) {

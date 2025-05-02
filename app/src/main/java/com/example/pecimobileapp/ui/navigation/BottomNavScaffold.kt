@@ -1,6 +1,6 @@
+
 package com.example.pecimobileapp.ui.navigation
 
-import DefineWorkoutScreen
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -12,9 +12,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.*
+import androidx.navigation.navArgument
 import com.example.pecimobileapp.network.MqttManagerImpl
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
@@ -28,7 +29,6 @@ fun BottomNavScaffold() {
     val currentRoute = navBackStackEntry?.destination?.route
     val vm: RealTimeViewModel = viewModel()
     val wsViewModel: WebSocketViewModel = viewModel()
-    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -132,12 +132,20 @@ fun BottomNavScaffold() {
                 composable("define_workout") {
                     DefineWorkoutScreen(navController)
                 }
-                composable("workout/{zone}?group={group}") { backStackEntry ->
-                    val zone = backStackEntry.arguments?.getString("zone")?.toIntOrNull() ?: 1
-                    val isGroup = backStackEntry.arguments?.getString("group")?.toBoolean() ?: false
+                composable(
+                    route = "workout/{zone}?group={group}",
+                    arguments = listOf(
+                        navArgument("zone") { type = NavType.IntType },
+                        navArgument("group") { type = NavType.StringType; defaultValue = "false" }
+                    )
+                ) { backStackEntry ->
+                    val zone = backStackEntry.arguments?.getInt("zone") ?: 1
+                    val groupParam = backStackEntry.arguments?.getString("group")
+                    val isGroup = groupParam != "false"
+                    val groupName = if (isGroup) groupParam else null
 
                     val mqttManager = remember(isGroup) {
-                        if (isGroup) MqttManagerImpl(context) else null
+                        if (isGroup) MqttManagerImpl() else null
                     }
 
                     WorkoutScreen(
@@ -145,12 +153,29 @@ fun BottomNavScaffold() {
                         selectedZone = zone,
                         isGroup = isGroup,
                         mqttManager = mqttManager,
+                        groupName = groupName,
                         onStop = { navController.popBackStack() },
                         realTimeViewModel = vm
                     )
                 }
-                composable("countdown") {
-                    CountdownScreen(navController = navController)
+                composable(
+                    route = "countdown?zone={zone}&group={group}",
+                    arguments = listOf(
+                        navArgument("zone") { type = NavType.IntType; defaultValue = 1 },
+                        navArgument("group") { type = NavType.StringType; defaultValue = "false" }
+                    )
+                ) { backStackEntry ->
+                    val zone = backStackEntry.arguments?.getInt("zone") ?: 1
+                    val group = backStackEntry.arguments?.getString("group") ?: "false"
+
+                    CountdownScreen(
+                        navController = navController,
+                        onCountdownFinished = {
+                            navController.navigate("workout/$zone?group=$group") {
+                                popUpTo("countdown") { inclusive = true }
+                            }
+                        }
+                    )
                 }
             }
         }

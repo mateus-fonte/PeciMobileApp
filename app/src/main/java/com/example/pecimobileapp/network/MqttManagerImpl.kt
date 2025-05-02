@@ -1,14 +1,17 @@
 package com.example.pecimobileapp.network
 
-import android.content.Context
-import org.eclipse.paho.android.service.MqttAndroidClient
 import org.eclipse.paho.client.mqttv3.*
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.concurrent.thread
 
-class MqttManagerImpl(context: Context) : MqttManager {
+class MqttManagerImpl : MqttManager {
 
     private val serverUri = "tcp://broker.hivemq.com:1883"
     private val clientId = MqttClient.generateClientId()
-    private val mqttClient = MqttAndroidClient(context, serverUri, clientId)
+    private val mqttClient = MqttClient(serverUri, clientId, MemoryPersistence())
+
+    private val callbacks = ConcurrentHashMap<String, (String) -> Unit>()
 
     init {
         val options = MqttConnectOptions().apply {
@@ -16,15 +19,30 @@ class MqttManagerImpl(context: Context) : MqttManager {
             isAutomaticReconnect = true
         }
 
-        mqttClient.connect(options, null, object : IMqttActionListener {
-            override fun onSuccess(asyncActionToken: IMqttToken?) {
-                println("✅ MQTT conectado com sucesso")
+        mqttClient.setCallback(object : MqttCallback {
+            override fun connectionLost(cause: Throwable?) {
+                println("⚠️ Conexão MQTT perdida: ${cause?.message}")
             }
 
-            override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
-                println("❌ Erro ao conectar MQTT: ${exception?.message}")
+            override fun messageArrived(topic: String?, message: MqttMessage?) {
+                if (topic != null && message != null) {
+                    callbacks[topic]?.invoke(message.toString())
+                }
+            }
+
+            override fun deliveryComplete(token: IMqttDeliveryToken?) {
+                // opcional
             }
         })
+
+        thread {
+            try {
+                mqttClient.connect(options)
+                println("✅ MQTT conectado com sucesso")
+            } catch (e: Exception) {
+                println("❌ Erro ao conectar MQTT: ${e.message}")
+            }
+        }
     }
 
     override fun publish(topic: String, message: String) {
@@ -34,8 +52,14 @@ class MqttManagerImpl(context: Context) : MqttManager {
     }
 
     override fun subscribe(topic: String, callback: (String) -> Unit) {
-        mqttClient.subscribe(topic, 0) { _, msg ->
-            callback(msg.toString())
+        callbacks[topic] = callback
+        if (mqttClient.isConnected) {
+            mqttClient.subscribe(topic)
+        } else {
+            thread {
+                while (!mqttClient.isConnected) Thread.sleep(100)
+                mqttClient.subscribe(topic)
+            }
         }
     }
 }
