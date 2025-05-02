@@ -13,6 +13,7 @@ import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import com.example.pecimobileapp.mqtt.MqttManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
@@ -37,21 +38,17 @@ class BleManager(private val context: Context) {
     private val adapter: BluetoothAdapter? get() = bluetoothManager.adapter
     private var gatt: BluetoothGatt? = null
 
-    // --- scan results ---
     private val _scanResults = MutableStateFlow<List<ScanResult>>(emptyList())
     val scanResults: StateFlow<List<ScanResult>> = _scanResults
 
-    // --- conexão geral ---
-    private val _connected   = MutableStateFlow(false)
-    val isConnected : StateFlow<Boolean>              = _connected
+    private val _connected = MutableStateFlow(false)
+    val isConnected: StateFlow<Boolean> = _connected
 
-    // --- dados PPG/Smartwatch ---
     private val _ppgHeartRate = MutableStateFlow<Int?>(null)
     val ppgHeartRate: StateFlow<Int?> = _ppgHeartRate
 
-    // --- dados câmera térmica ---
-    private val _avgTemp      = MutableStateFlow<Float?>(null)
-    val avgTemp       : StateFlow<Float?>             = _avgTemp
+    private val _avgTemp = MutableStateFlow<Float?>(null)
+    val avgTemp: StateFlow<Float?> = _avgTemp
 
     private val _maxTemp = MutableStateFlow<Float?>(null)
     val maxTemp: StateFlow<Float?> = _maxTemp
@@ -69,7 +66,6 @@ class BleManager(private val context: Context) {
         }
     }
 
-    /** Inicia o scan BLE (10s) */
     @SuppressLint("MissingPermission")
     fun startScan() {
         val btAdapter = adapter
@@ -85,24 +81,13 @@ class BleManager(private val context: Context) {
             return
         }
         _scanResults.value = emptyList()
-        val scanner = btAdapter.bluetoothLeScanner
-            ?: run {
-                Toast.makeText(context, "Scanner BLE não disponível", Toast.LENGTH_SHORT).show()
-                return
-            }
+        val scanner = btAdapter.bluetoothLeScanner ?: return
         scanner.startScan(scanCb)
-        Handler(Looper.getMainLooper()).postDelayed({
-            scanner.stopScan(scanCb)
-        }, 10_000)
+        Handler(Looper.getMainLooper()).postDelayed({ scanner.stopScan(scanCb) }, 10_000)
     }
 
-    /** Conecta e habilita NOTIFY em todas as 4 características */
     @SuppressLint("MissingPermission")
     private fun connect(device: BluetoothDevice) {
-        val btAdapter = adapter ?: run {
-            Toast.makeText(context, "BLE não disponível", Toast.LENGTH_SHORT).show()
-            return
-        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
             != PackageManager.PERMISSION_GRANTED
@@ -120,38 +105,22 @@ class BleManager(private val context: Context) {
                 }
             }
 
-            @SuppressLint("MissingPermission")
             override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
                 if (status != BluetoothGatt.GATT_SUCCESS) return
 
-                // Lista de pares (UUID do serviço → UUID da characteristic) para NOTIFY
                 listOf(
                     HR_SERVICE_UUID to HR_CHAR_UUID,
                     SENSOR_SERVICE_UUID to SENSOR_DATA1_UUID,
                     SENSOR_SERVICE_UUID to SENSOR_DATA2_UUID,
                     SENSOR_SERVICE_UUID to SENSOR_DATA3_UUID
                 ).forEach { (svcUuid, chrUuid) ->
-                    val service = g.getService(svcUuid)
-                    if (service == null) {
-                        Log.w(TAG, "Serviço $svcUuid não encontrado")
-                        return@forEach
+                    g.getService(svcUuid)?.getCharacteristic(chrUuid)?.let { chr ->
+                        g.setCharacteristicNotification(chr, true)
+                        chr.getDescriptor(CLIENT_CFG_UUID)?.apply {
+                            value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                            g.writeDescriptor(this)
+                        }
                     }
-                    val chr = service.getCharacteristic(chrUuid)
-                    if (chr == null) {
-                        Log.w(TAG, "Characteristic $chrUuid não encontrada em $svcUuid")
-                        return@forEach
-                    }
-
-                    // Habilita NOTIFY
-                    g.setCharacteristicNotification(chr, true)
-                    val descriptor = chr.getDescriptor(CLIENT_CFG_UUID)
-                    if (descriptor == null) {
-                        Log.w(TAG, "Descriptor CLIENT_CFG_UUID não encontrado em $chrUuid")
-                        return@forEach
-                    }
-
-                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                    g.writeDescriptor(descriptor)
                 }
             }
 
@@ -163,42 +132,50 @@ class BleManager(private val context: Context) {
 
             override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
                 val raw = String(characteristic.value, Charsets.UTF_8)
+                val groupId = "grupo1"
+                val userId = "aluno01"
+                val exerciseId = "exercicio_teste"
 
                 when (characteristic.uuid) {
                     HR_CHAR_UUID -> {
-                        val raw = String(characteristic.value, Charsets.UTF_8)
                         val idx = raw.indexOf('.')
                         val afterDot = if (idx != -1 && idx + 1 < raw.length) raw.substring(idx + 1) else raw
                         val digits = afterDot.filter { it.isDigit() }
                         val hrValue = digits.toIntOrNull()
                         _ppgHeartRate.value = hrValue
-
-                        Log.d(TAG, "HR → raw=\"$raw\", afterDot=\"$afterDot\", digits=\"$digits\", hrValue=$hrValue")
                         saveToFile(raw)
+
+                        hrValue?.let {
+                            MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it)
+                        }
                     }
 
                     SENSOR_DATA1_UUID, SENSOR_DATA2_UUID, SENSOR_DATA3_UUID -> {
                         val frac = raw.substringAfter('.', "0")
-                        // só mantém dígitos
                         val digits = frac.filter { it.isDigit() }
-                        // converte em inteiro e divide por 100
                         val temp = digits.toIntOrNull()?.div(100f) ?: 0f
 
-                        when (characteristic.uuid) {
-                            SENSOR_DATA1_UUID -> _avgTemp.value = temp
-                            SENSOR_DATA2_UUID -> _maxTemp.value = temp
-                            SENSOR_DATA3_UUID -> _minTemp.value = temp
+                        val source = when (characteristic.uuid) {
+                            SENSOR_DATA1_UUID -> {
+                                _avgTemp.value = temp; "avg_temp"
+                            }
+                            SENSOR_DATA2_UUID -> {
+                                _maxTemp.value = temp; "max_temp"
+                            }
+                            SENSOR_DATA3_UUID -> {
+                                _minTemp.value = temp; "min_temp"
+                            }
+                            else -> "unknown"
                         }
 
-                        Log.d(TAG, "Temp → raw=\"$raw\", frac=\"$frac\", digits=\"$digits\", temp=$temp")
                         saveToFile(raw)
+                        MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp)
                     }
                 }
             }
         })
     }
 
-    /** Chamadas públicas */
     fun connectPpg(device: BluetoothDevice) = connect(device)
     fun connectCam(device: BluetoothDevice) = connect(device)
 
@@ -207,10 +184,8 @@ class BleManager(private val context: Context) {
             val path = context.getExternalFilesDir(null) ?: context.filesDir
             val file = File(path, "bpm_log.txt")
             val writer = FileWriter(file, true)
-            writer.append(data).append("\n")
-            writer.flush()
+            writer.append(data).append("\n").flush()
             writer.close()
-            Log.d(TAG, "Salvo no arquivo: $data no caminho: ${file.absolutePath}")
         } catch (e: IOException) {
             Log.e(TAG, "Erro ao salvar no arquivo", e)
         }

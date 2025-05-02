@@ -33,12 +33,6 @@ class MainActivity : ComponentActivity() {
         bluetoothManager.adapter
     }
 
-    private val mqttClient = MqttClient.builder()
-        .useMqttVersion3()
-        .serverHost("48.217.187.110")
-        .serverPort(1883)
-        .identifier("AndroidClient_${UUID.randomUUID()}")
-        .buildBlocking()
 
     private val requestBluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -69,9 +63,6 @@ class MainActivity : ComponentActivity() {
                 AppNavigation(bluetoothViewModel)
             }
         }
-
-        connectToMqtt()
-        observeSensorData()
 
         if (bluetoothAdapter == null) {
             Toast.makeText(this, "Bluetooth não está disponível neste dispositivo", Toast.LENGTH_LONG).show()
@@ -116,55 +107,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun connectToMqtt() {
-        try {
-            mqttClient.connect()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun observeSensorData() {
-        val groupId = "grupo1"
-        val exerciseId = "exercicio_teste"
-        val userUid = "teste123"
-
-        lifecycleScope.launch {
-            bluetoothViewModel.bpm.collectLatest { value ->
-                value?.let {
-                    sendMqttPayload(groupId, exerciseId, userUid, "bpm", it)
-                }
-            }
-        }
-
-        lifecycleScope.launch {
-            bluetoothViewModel.thermalTemperature.collectLatest { value ->
-                value?.let {
-                    sendMqttPayload(groupId, exerciseId, userUid, "cam", it)
-                }
-            }
-        }
-    }
-
-    private fun sendMqttPayload(
-        groupId: String,
-        exerciseId: String,
-        userUid: String,
-        source: String,
-        value: Number
-    ) {
-        val timestamp = System.currentTimeMillis()
-        val topic = "/group/$groupId/data"
-        val payload = "{\"group_id\": \"$groupId\", \"exercise_id\": \"$exerciseId\", \"user_uid\": \"$userUid\", \"source\": \"$source\", \"value\": $value, \"timestamp\": $timestamp }"
-
-        try {
-            mqttClient.publishWith()
-                .topic(topic)
-                .payload(payload.toByteArray(StandardCharsets.UTF_8))
-                .qos(MqttQos.AT_LEAST_ONCE)
-                .send()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
 }
