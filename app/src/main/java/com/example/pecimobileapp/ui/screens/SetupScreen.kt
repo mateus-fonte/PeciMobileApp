@@ -9,16 +9,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
+import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 
 @Composable
 fun SetupScreen(
     viewModel: RealTimeViewModel,
-    navController: NavController
+    navController: NavController,
+    wsViewModel: WebSocketViewModel
 ) {
     val ppgResults   by viewModel.scanResultsPpg.collectAsState()
     val camResults   by viewModel.scanResultsCam.collectAsState()
     val ppgConnected by viewModel.isPpgConnected.collectAsState()
-    val camConnected by viewModel.isCamConnected.collectAsState()
+    val useBle        by viewModel.isCamConnected.collectAsState()
+    val useWs         by wsViewModel.isWsConnected.collectAsState()
     val ready        by viewModel.readyToStart.collectAsState()
 
     Column(
@@ -40,16 +43,23 @@ fun SetupScreen(
         BleConnectionSection(
             title       = "Câmera Térmica",
             scanResults = camResults,
-            isConnected = camConnected,
+            isConnected = useBle,
             onScan      = { viewModel.startCamScan() },
             onConnect   = { viewModel.connectCam(it) }
         )
 
-        if (camConnected) {
+        if (useBle) {
             ConfigSection(viewModel)
-        } else {
+            if (useWs){
+                Text(
+                    text = "Câmera térmica conectada por Wifi!",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(8.dp)
+                )
+            }
+        } else if (!useWs) {
             Text(
-                "Conecte a câmera térmica para habilitar configurações",
+                "Conecte a câmera térmica por bluetooth para habilitar configurações",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium
             )
