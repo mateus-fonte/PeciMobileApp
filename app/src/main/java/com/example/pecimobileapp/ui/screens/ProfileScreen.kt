@@ -10,8 +10,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.pecimobileapp.ui.ProfileViewModel
 import com.example.pecimobileapp.viewmodels.ProfileViewModel
 import com.example.pecimobileapp.viewmodels.ProfileViewModelFactory
+
 
 @Composable
 fun ProfileScreen(navToEdit: () -> Unit = {}) {
@@ -36,7 +38,7 @@ fun ProfileScreen(navToEdit: () -> Unit = {}) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     ProfileField("Nome", viewModel.nome)
-                    ProfileField("Apelido", viewModel.apelido)
+                    ProfileField("Identificador", viewModel.identificador)
                     ProfileField("Peso", "${viewModel.peso} kg")
                     ProfileField("Ano de Nascimento", "${viewModel.anoNascimento}")
                     ProfileField("FC Máxima", "${viewModel.fcMax} bpm")
