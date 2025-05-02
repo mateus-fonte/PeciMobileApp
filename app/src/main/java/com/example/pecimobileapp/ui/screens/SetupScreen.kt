@@ -20,8 +20,8 @@ fun SetupScreen(
     val ppgResults   by viewModel.scanResultsPpg.collectAsState()
     val camResults   by viewModel.scanResultsCam.collectAsState()
     val ppgConnected by viewModel.isPpgConnected.collectAsState()
-    val useBle        by viewModel.isCamConnected.collectAsState()
-    val useWs         by wsViewModel.isWsConnected.collectAsState()
+    val useBle       by viewModel.isCamConnected.collectAsState()
+    val useWs        by wsViewModel.isWsConnected.collectAsState()
     val ready        by viewModel.readyToStart.collectAsState()
 
     Column(
@@ -30,6 +30,7 @@ fun SetupScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
+        // 🔌 Seção de conexão com o dispositivo PPG / Smartwatch via BLE
         BleConnectionSection(
             title       = "PPG / Smartwatch",
             scanResults = ppgResults,
@@ -40,6 +41,7 @@ fun SetupScreen(
 
         Spacer(Modifier.height(24.dp))
 
+        // 🔌 Seção de conexão com a câmera térmica via BLE
         BleConnectionSection(
             title       = "Câmera Térmica",
             scanResults = camResults,
@@ -48,18 +50,29 @@ fun SetupScreen(
             onConnect   = { viewModel.connectCam(it) }
         )
 
-        if (useBle) {
+        Spacer(Modifier.height(24.dp))
+
+        // ⚙️ Seção de configuração da câmera térmica (Wi-Fi), visível se PPG ou WebSocket estiverem ativos
+        if (ppgConnected || useWs) {
+            Text(
+                text = "Configurar Wi-Fi da Câmera Térmica",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
             ConfigSection(viewModel)
-            if (useWs){
+
+            if (useWs) {
                 Text(
-                    text = "Câmera térmica conectada por Wifi!",
+                    text = "✓ Câmera térmica conectada por Wi-Fi!",
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(8.dp)
                 )
             }
-        } else if (!useWs) {
+        } else {
+            // 🚫 Caso o PPG ainda não esteja conectado
             Text(
-                "Conecte a câmera térmica por bluetooth para habilitar configurações",
+                "Conecte o PPG/Smartwatch para habilitar configurações",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium
             )
@@ -67,9 +80,10 @@ fun SetupScreen(
 
         Spacer(Modifier.height(32.dp))
 
+        // ▶️ Botão para iniciar a atividade física (habilitado só se o PPG estiver conectado)
         Button(
             onClick = { navController.navigate("define_workout") },
-            enabled = ready,
+            enabled = ppgConnected,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Iniciar Atividade Física")
