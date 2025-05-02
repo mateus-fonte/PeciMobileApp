@@ -20,10 +20,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
-import com.example.pecimobileapp.ui.screens.WorkoutScreen
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
-
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,8 +30,6 @@ fun BottomNavScaffold() {
     val currentRoute = navBackStackEntry?.destination?.route
     val vm: RealTimeViewModel = viewModel()
     val wsViewModel: WebSocketViewModel = viewModel()
-
-    val realTimeModel: RealTimeViewModel = viewModel()
 
     Scaffold(
         topBar = {
@@ -120,11 +115,8 @@ fun BottomNavScaffold() {
                 modifier = Modifier.fillMaxSize()
             ) {
                 composable("setup") { SetupScreen(vm, navController) }
-
-                composable("main")  { MainScreen(vm) }
-
+                composable("main") { MainScreen(vm) }
                 composable("websocket") { WebSocketScreen(wsViewModel) }
-
                 composable("historico") {
                     HistoricoScreen(onBackClick = { navController.popBackStack() })
                 }
@@ -135,37 +127,27 @@ fun BottomNavScaffold() {
                 }
                 composable("profile_setup") {
                     ProfileSetupScreen(onSave = {
-                        navController.popBackStack()  // volta para o ProfileScreen
+                        navController.popBackStack()
                     })
                 }
-
                 composable("define_workout") {
                     DefineWorkoutScreen(navController)
                 }
                 composable("workout/{zone}/{nickname}") { backStackEntry ->
                     val zone = backStackEntry.arguments?.getString("zone")?.toIntOrNull() ?: 1
-                    val nickname = backStackEntry.arguments?.getString("nickname") ?: "YOU"
+                    val nickname = backStackEntry.arguments?.getString("nickname") ?: "Tu"
 
                     WorkoutScreen(
                         navController = navController,
                         selectedZone = zone,
                         nickname = nickname,
-                        heartRate = 145,
-                        temperature = 36.7f,
-                        execution = 92.5f,
-                        onStop = { navController.popBackStack() }
+                        onStop = { navController.popBackStack() },
+                        realTimeViewModel = vm // <<<<<< PASSEI AQUI
                     )
                 }
-
-
                 composable("countdown") {
                     CountdownScreen(navController = navController)
                 }
-
-
-
-
-
             }
         }
     }
