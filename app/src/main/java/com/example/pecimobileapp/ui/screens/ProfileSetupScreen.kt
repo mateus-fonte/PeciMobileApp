@@ -63,7 +63,7 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                     OutlinedTextField(
                         value = viewModel.identificador,
                         onValueChange = {
-                            if (it.length <= 10) viewModel.updateApelido(it)
+                            if (it.length <= 10) viewModel.updateIdentificador(it)
                         },
                         label = { Text("Identificador (máx. 10 caracteres)") },
                         modifier = Modifier.fillMaxWidth()
