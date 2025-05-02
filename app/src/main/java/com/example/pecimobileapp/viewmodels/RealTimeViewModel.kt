@@ -27,6 +27,10 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
     val isPpgConnected: StateFlow<Boolean> = blePpg.isConnected
     val isCamConnected: StateFlow<Boolean> = bleCam.isConnected
 
+    // novo: flows de “perda de conexão”
+    val ppgConnectionLost: StateFlow<Boolean> = blePpg.connectionLost
+    val camConnectionLost: StateFlow<Boolean> = bleCam.connectionLost
+
     // 3) Dados por notify
     val ppgHeartRate: StateFlow<Int?> = blePpg.ppgHeartRate
     val avgTemp:       StateFlow<Float?> = bleCam.avgTemp
@@ -46,6 +50,7 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
             }
             .stateIn(viewModelScope, SharingStarted.Lazily, "")
 
+
     // UI triggers
     fun startPpgScan() = viewModelScope.launch { blePpg.startScan() }
     fun connectPpg(device: BluetoothDevice) = viewModelScope.launch { blePpg.connectPpg(device) }
@@ -61,5 +66,7 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         val ip = serverAddress.value
         bleCam.sendAllConfigs(ssid, password, ip)
     }
+
+
 
 }

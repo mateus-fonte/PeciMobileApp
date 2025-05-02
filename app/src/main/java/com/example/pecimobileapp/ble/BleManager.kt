@@ -55,9 +55,19 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private val adapter: BluetoothAdapter? get() = bluetoothManager.adapter
     private var gatt: BluetoothGatt? = null
 
+    // para guardar o último device e controlar tentativas
+    private var lastDevice: BluetoothDevice? = null
+    private var retryCount = 0
+    private val maxRetries = 3
+    private val retryDelayMs = 5_000L
+
     // scan results
     private val _scanResults = MutableStateFlow<List<ScanResult>>(emptyList())
     val scanResults: StateFlow<List<ScanResult>> = _scanResults
+
+    // — sinaliza que não conseguiu reconectar após maxRetries —
+    private val _connectionLost = MutableStateFlow(false)
+    val connectionLost: StateFlow<Boolean> = _connectionLost
 
     // estados de conexão e dados recebidos
     private val _connected = MutableStateFlow(false)
@@ -114,6 +124,11 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     /** Conecta e habilita NOTIFY em todas as sensors + preenche fila de writes */
     @SuppressLint("MissingPermission")
     private fun connect(device: BluetoothDevice) {
+        lastDevice = device
+        retryCount = 0
+        _connectionLost.value = false
+        doConnect(device)
+
         val btAdapter = adapter ?: run {
             Toast.makeText(context, "BLE não disponível", Toast.LENGTH_SHORT).show()
             return
@@ -126,6 +141,33 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             return
         }
         gatt = device.connectGatt(context, false, this)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun doConnect(device: BluetoothDevice) {
+        gatt = device.connectGatt(context, false, object : BluetoothGattCallback() {
+            override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+                if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    retryCount = 0
+                    _connected.value = true
+                    g.discoverServices()
+                } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    _connected.value = false
+                    attemptReconnect()
+                }
+            }
+        })
+    }
+    private fun attemptReconnect() {
+        val device = lastDevice ?: return
+        if (retryCount < maxRetries) {
+            retryCount++
+            Handler(Looper.getMainLooper()).postDelayed({
+                doConnect(device)
+            }, retryDelayMs)
+        } else {
+            _connectionLost.value = true
+        }
     }
 
     fun connectPpg(device: BluetoothDevice) = connect(device)
