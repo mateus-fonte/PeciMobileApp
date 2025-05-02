@@ -1,5 +1,6 @@
 package com.example.pecimobileapp.ui.screens
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,7 +52,10 @@ fun WorkoutScreen(
     isGroup: Boolean = false,
     mqttManager: MqttManagerImpl? = null
 ) {
-    val profileViewModel: ProfileViewModel = viewModel()
+    val context = LocalContext.current
+    val factory = remember { ProfileViewModelFactory(context) }
+    val profileViewModel: ProfileViewModel = viewModel(factory = factory)
+
     val identificador = profileViewModel.identificador
 
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
@@ -96,7 +101,7 @@ fun WorkoutScreen(
                         put("timestamp", System.currentTimeMillis() / 1000)
                         put("id", identificador)
                         put("exec_pct", executionPercentage)
-                        put("grupo", identificador) // Nome do grupo = identificador
+                        put("grupo", identificador) // grupo = identificador mesmo
                     }
                     mqttManager.publish("grupo/execucao", json.toString())
                 }
@@ -112,7 +117,8 @@ fun WorkoutScreen(
                     if (json.getString("id") == identificador) {
                         position = json.getInt("position")
                     }
-                } catch (_: Exception) { }
+                } catch (_: Exception) {
+                }
             }
         }
     }
@@ -169,7 +175,6 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Barras de zona (de baixo para cima)
             Column(modifier = Modifier.fillMaxWidth()) {
                 for (i in 5 downTo 1) {
                     val isLit = i <= currentZone
@@ -195,9 +200,30 @@ fun WorkoutScreen(
                     .padding(8.dp)
             )
 
-            if (isGroup && position > 0) {
+            // SOMENTE MOSTRAR SE FOR GRUPO
+            if (isGroup) {
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("🏆 Estás em ${position}º lugar!", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Column {
+                    Text(
+                        text = "👥 Grupo: ${groupName ?: "Desconhecido"}",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    if (position > 0) {
+                        Text(
+                            text = "🏆 Estás em ${position}º lugar!",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            text = "⏳ A aguardar resultados para o ranking...",
+                            fontSize = 16.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
