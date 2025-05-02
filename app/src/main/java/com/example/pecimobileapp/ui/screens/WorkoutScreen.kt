@@ -1,11 +1,12 @@
 package com.example.pecimobileapp.ui.screens
 
-import android.content.Context
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -15,17 +16,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.pecimobileapp.network.MqttManagerImpl
-import kotlinx.coroutines.delay
-import org.json.JSONObject
+import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.ui.ProfileViewModel
-import com.example.pecimobileapp.viewmodels.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 val zoneColors = mapOf(
@@ -37,11 +34,7 @@ val zoneColors = mapOf(
     6 to Color(0xFF9E9E9E)
 )
 
-interface MqttManager {
-    fun publish(topic: String, message: String)
-    fun subscribe(topic: String, callback: (String) -> Unit)
-}
-
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun WorkoutScreen(
     navController: NavController,
@@ -50,13 +43,12 @@ fun WorkoutScreen(
     onStop: () -> Unit,
     realTimeViewModel: RealTimeViewModel,
     isGroup: Boolean = false,
-    mqttManager: MqttManagerImpl? = null
+    mqttManager: MqttManager? = null
 ) {
-    val context = LocalContext.current
-    val factory = remember { ProfileViewModelFactory(context) }
-    val profileViewModel: ProfileViewModel = viewModel(factory = factory)
+    val profileViewModel: ProfileViewModel = viewModel()
 
     val identificador = profileViewModel.identificador
+    val zonas = profileViewModel.zonas
 
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
     val avgTemp by realTimeViewModel.avgTemp.collectAsState()
@@ -66,62 +58,38 @@ fun WorkoutScreen(
     val zoneColor = zoneColors[selectedZone] ?: zoneColors[6]!!
 
     var isRunning by remember { mutableStateOf(true) }
-    var timeInZone by remember { mutableStateOf(0) }
-    var elapsedSeconds by remember { mutableStateOf(0) }
     var executionPercentage by remember { mutableStateOf(0f) }
     var position by remember { mutableStateOf(-1) }
 
-    val zonas = profileViewModel.zonas
-    val currentZone = remember(hr) {
-        hr?.let { bpm ->
-            zonas.indexOfFirst { bpm in it.second }.let {
-                when {
-                    it == -1 && bpm < zonas.first().second.first -> 0
-                    it == -1 && bpm > zonas.last().second.last -> 5
-                    else -> it + 1
-                }
-            }
-        } ?: 0
-    }
+    val scrollState = rememberScrollState()
 
     LaunchedEffect(isRunning) {
+        MqttManager.WorkoutSessionManager.resetSession()
+
+        if (isGroup && mqttManager != null) {
+            MqttManager.WorkoutSessionManager.subscribePositionUpdates(
+                groupId = groupName ?: "",
+                userId = identificador
+            ) { newPosition ->
+                position = newPosition
+            }
+        }
+
         while (isRunning) {
-            delay(1000L)
-            elapsedSeconds++
-
-            if (hr != null && isHeartRateInZone(hr!!, selectedZone, profileViewModel)) {
-                timeInZone++
-            }
-
-            if (elapsedSeconds % 60 == 0) {
-                executionPercentage = (timeInZone.toFloat() / elapsedSeconds * 100)
-
-                if (isGroup && mqttManager != null) {
-                    val json = JSONObject().apply {
-                        put("timestamp", System.currentTimeMillis() / 1000)
-                        put("id", identificador)
-                        put("exec_pct", executionPercentage)
-                        put("grupo", identificador) // grupo = identificador mesmo
-                    }
-                    mqttManager.publish("grupo/execucao", json.toString())
-                }
-            }
+            kotlinx.coroutines.delay(1000L)
+            val exec = MqttManager.WorkoutSessionManager.updateSession(
+                heartRate = hr,
+                selectedZone = selectedZone,
+                zonas = zonas,
+                groupId = groupName ?: "",
+                userId = identificador
+            )
+            executionPercentage = exec
         }
     }
 
-    if (isGroup && mqttManager != null) {
-        LaunchedEffect(Unit) {
-            mqttManager.subscribe("grupo") { message ->
-                try {
-                    val json = JSONObject(message)
-                    if (json.getString("id") == identificador) {
-                        position = json.getInt("position")
-                    }
-                } catch (_: Exception) {
-                }
-            }
-        }
-    }
+    val elapsedSeconds = MqttManager.WorkoutSessionManager.getElapsedTime()
+    val currentZone = MqttManager.WorkoutSessionManager.getLastZone()
 
     val formattedTime = String.format(
         "%02d:%02d:%02d",
@@ -129,8 +97,6 @@ fun WorkoutScreen(
         (elapsedSeconds % 3600) / 60,
         elapsedSeconds % 60
     )
-
-    val scrollState = rememberScrollState()
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -200,7 +166,6 @@ fun WorkoutScreen(
                     .padding(8.dp)
             )
 
-            // SOMENTE MOSTRAR SE FOR GRUPO
             if (isGroup) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Column {
@@ -256,9 +221,4 @@ fun CardInfo(title: String, value: String) {
             Text(value, style = MaterialTheme.typography.headlineLarge)
         }
     }
-}
-
-fun isHeartRateInZone(heartRate: Int, selectedZone: Int, profileViewModel: ProfileViewModel): Boolean {
-    val faixa = profileViewModel.zonas.getOrNull(selectedZone - 1)?.second
-    return faixa?.contains(heartRate) == true
 }
