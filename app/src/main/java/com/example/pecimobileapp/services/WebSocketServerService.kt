@@ -68,7 +68,6 @@ class WebSocketServerService(private val context: Context) {
         val clientsCount: Int = 0,
         val receivedMessages: Int = 0,
         val serverAddress: String = "",
-        val allNetworkIPs: List<String> = listOf(),
         val detectedFaces: Int = 0
     )
     
@@ -91,13 +90,12 @@ class WebSocketServerService(private val context: Context) {
                 server?.start()
             }
             
-            val serverIP = getIpAddresses()
+            val serverIP = getIpAddress()
             Log.d(TAG, "Servidor iniciado em $serverIP:$port")
             
             _isRunning.value = true
             _connectionStats.value = _connectionStats.value.copy(
-                serverAddress = "$serverIP:$port",
-                allNetworkIPs = getAllIpAddresses()
+                serverAddress = "$serverIP:$port"
             )
             
             return true
@@ -127,9 +125,32 @@ class WebSocketServerService(private val context: Context) {
     }
     
     /**
-     * Obtém o endereço IP do dispositivo (WiFi)
+     * Obtém o endereço IP do hotspot (ap0)
      */
-    private fun getIpAddresses(): String {
+    private fun getIpAddress(): String {
+        // Procurar especificamente a interface ap0
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isUp && networkInterface.name == "ap0") {
+                    val addresses = networkInterface.inetAddresses
+                    while (addresses.hasMoreElements()) {
+                        val address = addresses.nextElement()
+                        if (!address.isLoopbackAddress && address is InetAddress && 
+                                address.hostAddress.indexOf(':') < 0) { // Filtra IPv6
+                            Log.d(TAG, "Endereço IP da interface ap0: ${address.hostAddress}")
+                            return address.hostAddress
+                        }
+                    }
+                }
+            }
+            Log.d(TAG, "Interface ap0 não encontrada ou sem endereço IP válido")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao obter endereço IP da interface ap0", e)
+        }
+        
+        // Fallback: WifiManager (mantido como backup)
         try {
             val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
             val ipAddress = wifiManager.connectionInfo.ipAddress
@@ -148,7 +169,7 @@ class WebSocketServerService(private val context: Context) {
             Log.e(TAG, "Erro ao obter endereço IP via WifiManager", e)
         }
         
-        // Fallback: tentar obter o IP por NetworkInterface
+        // Segundo fallback: outras interfaces de rede
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
@@ -170,31 +191,6 @@ class WebSocketServerService(private val context: Context) {
         }
         
         return "127.0.0.1" // IP localhost como último recurso
-    }
-    
-    /**
-     * Obtém todos os endereços IP do dispositivo (WiFi, hotspot, etc.)
-     */
-    private fun getAllIpAddresses(): List<String> {
-        val result = mutableListOf<String>()
-        try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-                if (networkInterface.isUp && !networkInterface.isLoopback) {
-                    val addresses = networkInterface.inetAddresses
-                    while (addresses.hasMoreElements()) {
-                        val address = addresses.nextElement()
-                        if (!address.isLoopbackAddress && address is InetAddress) {
-                            result.add(address.hostAddress + " (" + networkInterface.displayName + ")")
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao obter endereços IP", e)
-        }
-        return result
     }
     
     /**
