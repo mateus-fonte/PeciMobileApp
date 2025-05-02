@@ -41,15 +41,25 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
     val readyToStart: StateFlow<Boolean> = combine(isPpgConnected, isCamConnected) { ppg, cam -> ppg && cam }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    // 5) IP do servidor WS
-    val serverAddress: StateFlow<String> =
-        wsService.connectionStats
-            .map { stats ->
-                // stats.serverAddress vem no formato "IP:porta"
-                stats.serverAddress.substringBefore(":")
-            }
-            .stateIn(viewModelScope, SharingStarted.Lazily, "")
 
+    /** ❶ lista crua de "IP (interface)" */
+    val allNetworkIPs: StateFlow<List<String>> =
+        wsService.connectionStats
+            .map { it.allNetworkIPs }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** ❷ extrai só o IP da interface de Wi-Fi (wlan0) ou fallback vazio */
+    val accessPointIp: StateFlow<String> =
+        allNetworkIPs
+            .map { list ->
+                list.firstOrNull { entry ->
+                    // ajusta aqui o nome da interface que for seu AP — ex: "wlan" ou "ap"
+                    entry.contains("(ap") && entry.length <= 22
+                }?.substringBefore(" ")
+                // substringBefore(" ") pega tudo antes do espaço, i.e. só o IP sem "(..."
+                    ?: ""
+            }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
     // UI triggers
     fun startPpgScan() = viewModelScope.launch { blePpg.startScan() }
@@ -63,7 +73,7 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         ssid: String,
         password: String
     ) = viewModelScope.launch {
-        val ip = serverAddress.value
+        val ip = accessPointIp.value
         bleCam.sendAllConfigs(ssid, password, ip)
     }
 
