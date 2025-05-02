@@ -111,7 +111,7 @@ fun WorkoutScreen(
 
     if (isGroup && mqttManager != null) {
         LaunchedEffect(Unit) {
-            mqttManager.subscribe("grupo/posicao") { message ->
+            mqttManager.subscribe("grupo") { message ->
                 try {
                     val json = JSONObject(message)
                     if (json.getString("id") == identificador) {
