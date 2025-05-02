@@ -11,20 +11,20 @@ private val Context.dataStore by preferencesDataStore(name = "profile_prefs")
 
 object ProfilePreferences {
 
-    // Chaves
+    // 🔑 Chaves
     val nomeKey = stringPreferencesKey("nome")
-    val apelidoKey = stringPreferencesKey("apelido")
+    val identificadorKey = stringPreferencesKey("identificador")
     val anoNascimentoKey = intPreferencesKey("ano_nascimento")
     val fcMaxManualKey = intPreferencesKey("fc_max_manual")
 
-    // Funções para gravar
+    // 💾 Funções para gravar
 
     suspend fun saveNome(context: Context, nome: String) {
         context.dataStore.edit { it[nomeKey] = nome }
     }
 
-    suspend fun saveApelido(context: Context, apelido: String) {
-        context.dataStore.edit { it[apelidoKey] = apelido }
+    suspend fun saveIdentificador(context: Context, identificador: String) {
+        context.dataStore.edit { it[identificadorKey] = identificador }
     }
 
     suspend fun saveAnoNascimento(context: Context, ano: Int) {
@@ -38,14 +38,14 @@ object ProfilePreferences {
         }
     }
 
-    // Funções para ler
+    // 📤 Funções para ler
 
     fun nomeFlow(context: Context): Flow<String> = context.dataStore.data.map {
         it[nomeKey] ?: "Maria"
     }
 
-    fun apelidoFlow(context: Context): Flow<String> = context.dataStore.data.map {
-        it[apelidoKey] ?: "Sabinada"
+    fun identificadorFlow(context: Context): Flow<String> = context.dataStore.data.map {
+        it[identificadorKey] ?: "Sabinada"
     }
 
     fun anoNascimentoFlow(context: Context): Flow<Int> = context.dataStore.data.map {
