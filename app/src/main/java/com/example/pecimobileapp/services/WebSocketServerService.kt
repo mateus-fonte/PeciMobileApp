@@ -32,7 +32,10 @@ class WebSocketServerService(private val context: Context) {
     
     // OpenCV
     private val openCVUtils: OpenCVUtils by lazy {
-        OpenCVUtils(context)
+            OpenCVUtils(context)
+    }
+    
+            OpenCVUtils(context)
     }
     
     // Para observar o estado da conexão

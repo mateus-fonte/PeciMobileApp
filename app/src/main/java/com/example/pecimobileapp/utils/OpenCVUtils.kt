@@ -344,14 +344,14 @@ class OpenCVUtils(private val context: Context) {
         
         val textPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 30f
+            textSize = 20f  // Reduzido de 30f para 20f
             isFakeBoldText = true
             setShadowLayer(2f, 1f, 1f, Color.BLACK)
         }
         
         // Posição e tamanho da barra de legenda
         val legendWidth = width / 3
-        val legendHeight = 30
+        val legendHeight = 20  // Reduzido de 30 para 20
         val legendX = width - legendWidth - 20
         val legendY = height - legendHeight - 20
         
@@ -368,18 +368,21 @@ class OpenCVUtils(private val context: Context) {
             )
         }
         
-        // Desenha os valores mínimo e máximo
+        // Desenha os valores mínimo e máximo com melhor posicionamento
         canvas.drawText(
             String.format("%.1f°C", minTemp),
             legendX.toFloat(),
-            (legendY - 10).toFloat(),
+            (legendY - 5).toFloat(),  // Ajustado para ficar mais próximo da legenda
             textPaint
         )
         
+        val maxTempText = String.format("%.1f°C", maxTemp)
+        val maxTextWidth = textPaint.measureText(maxTempText)
+        
         canvas.drawText(
-            String.format("%.1f°C", maxTemp),
-            (legendX + legendWidth - 80).toFloat(),
-            (legendY - 10).toFloat(),
+            maxTempText,
+            (legendX + legendWidth - maxTextWidth).toFloat(),  // Alinhado à direita da legenda
+            (legendY - 5).toFloat(),  // Ajustado para ficar mais próximo da legenda
             textPaint
         )
     }
