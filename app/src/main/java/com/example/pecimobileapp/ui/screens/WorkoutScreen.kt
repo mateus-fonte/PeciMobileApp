@@ -42,6 +42,7 @@ interface MqttManager {
 @Composable
 fun WorkoutScreen(
     navController: NavController,
+    groupName: String? = null,
     selectedZone: Int,
     onStop: () -> Unit,
     realTimeViewModel: RealTimeViewModel,
@@ -167,14 +168,20 @@ fun WorkoutScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            repeat(5) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(20.dp)
-                        .padding(vertical = 2.dp)
-                        .background(zoneColors[currentZone] ?: zoneColors[6]!!)
-                )
+            // Barras de zona (de baixo para cima)
+            Column(modifier = Modifier.fillMaxWidth()) {
+                for (i in 5 downTo 1) {
+                    val isLit = i <= currentZone
+                    val color = if (isLit) zoneColors[i] ?: zoneColors[6]!! else zoneColors[6]!!
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(20.dp)
+                            .padding(vertical = 2.dp)
+                            .background(color)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
