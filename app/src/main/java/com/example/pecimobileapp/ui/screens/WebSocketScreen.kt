@@ -18,6 +18,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.pecimobileapp.utils.OpenCVUtils
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -51,6 +52,7 @@ fun WebSocketScreen(
     val cameraImageData by viewModel.latestCameraImage.collectAsState()
     val thermalData by viewModel.latestThermalData.collectAsState()
     val connectionStats by viewModel.connectionStats.collectAsState()
+    val processedImageData by viewModel.processedImage.collectAsState()
     
     // Estados locais
     var port by remember { mutableStateOf("8080") }
@@ -85,13 +87,12 @@ fun WebSocketScreen(
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Imagens da câmera e térmica
-        ImagesSection(
-            cameraImage = cameraImageData.first,
+        // Imagem processada com detecção facial e dados térmicos
+        ProcessedImageSection(
+            processedImage = processedImageData.first,
+            faceData = processedImageData.second,
             cameraTimestamp = cameraImageData.second,
-            thermalData = thermalData.first,
             thermalTimestamp = thermalData.second,
-            viewModel = viewModel
         )
     }
 }
@@ -161,7 +162,7 @@ fun ConnectionInfoSection(
                 )
             }
             
-            // Clientes conectados
+            // Clientes conectados e estatísticas
             if (isServerRunning) {
                 Text(
                     text = "Clientes conectados: ${connectionStats.clientsCount}",
@@ -171,6 +172,14 @@ fun ConnectionInfoSection(
                 Text(
                     text = "Mensagens recebidas: ${connectionStats.receivedMessages}",
                     modifier = Modifier.padding(vertical = 4.dp)
+                )
+                
+                // Estatísticas de detecção facial
+                Text(
+                    text = "Rostos detectados: ${connectionStats.detectedFaces}",
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
             
@@ -213,12 +222,11 @@ fun ConnectionInfoSection(
 }
 
 @Composable
-fun ImagesSection(
-    cameraImage: Bitmap?,
+fun ProcessedImageSection(
+    processedImage: Bitmap?,
+    faceData: List<OpenCVUtils.FaceData>,
     cameraTimestamp: String,
-    thermalData: FloatArray?,
-    thermalTimestamp: String,
-    viewModel: WebSocketViewModel
+    thermalTimestamp: String
 ) {
     // Preparar as datas formatadas fora do contexto do Composable
     val formattedCameraDate = remember(cameraTimestamp) {
@@ -229,196 +237,109 @@ fun ImagesSection(
         formatTimestamp(thermalTimestamp)
     }
 
-    Column(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 16.dp)
+            .padding(bottom = 16.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
-        // Imagem da câmera
-        Card(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            elevation = CardDefaults.cardElevation(4.dp)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Imagem da Câmera",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 8.dp)
+            Text(
+                text = "Processamento de Imagem - Detecção Facial e Térmica",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            if (processedImage != null) {
+                Image(
+                    bitmap = processedImage.asImageBitmap(),
+                    contentDescription = "Imagem processada com detecção facial e térmica",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(400.dp)
+                        .padding(vertical = 8.dp)
                 )
                 
-                if (cameraImage != null) {
-                    Image(
-                        bitmap = cameraImage.asImageBitmap(),
-                        contentDescription = "Imagem da câmera",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(300.dp)
-                            .padding(vertical = 8.dp)
+                // Exibir informações de rostos detectados
+                if (faceData.isNotEmpty()) {
+                    Text(
+                        text = "${faceData.size} rosto(s) detectado(s)",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
                     
-                    if (cameraTimestamp.isNotEmpty()) {
-                        Text(
-                            text = "Timestamp: $cameraTimestamp",
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                        
-                        formattedCameraDate?.let {
-                            Text(
-                                text = "Data: $it",
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
+                    // Listar temperaturas faciais
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                    ) {
+                        faceData.forEachIndexed { index, face ->
+                            if (!face.temperature.isNaN()) {
+                                Text(
+                                    text = "Rosto ${index + 1}: ${String.format("%.1f°C", face.temperature)}",
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
                         }
                     }
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .background(Color.LightGray),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Aguardando imagem...",
-                            fontSize = 16.sp,
-                            color = Color.DarkGray
-                        )
-                    }
+                    Text(
+                        text = "Nenhum rosto detectado",
+                        color = Color.Gray,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
-            }
-        }
-        
-        // Matriz térmica
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(4.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Matriz Térmica (32x24)",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
                 
-                if (thermalData != null) {
-                    // Renderizar a matriz térmica como uma grade de cores
-                    ThermalMatrix(thermalData = thermalData)
+                // Mostrar timestamps das imagens
+                if (cameraTimestamp.isNotEmpty() || thermalTimestamp.isNotEmpty()) {
+                    Divider(modifier = Modifier.padding(vertical = 8.dp))
                     
-                    // Mostrar estatísticas
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        // Mínimo
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Min", fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Informações de Timestamp:",
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                    
+                    if (cameraTimestamp.isNotEmpty()) {
+                        formattedCameraDate?.let {
                             Text(
-                                text = "${viewModel.getThermalMinValue().roundToInt()}°C",
-                                color = Color.Blue
-                            )
-                        }
-                        
-                        // Média
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Média", fontWeight = FontWeight.Bold)
-                            Text(
-                                text = "${viewModel.getThermalAvgValue().roundToInt()}°C"
-                            )
-                        }
-                        
-                        // Máximo
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Max", fontWeight = FontWeight.Bold)
-                            Text(
-                                text = "${viewModel.getThermalMaxValue().roundToInt()}°C",
-                                color = Color.Red
+                                text = "Câmera: $it",
+                                modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
                     }
                     
                     if (thermalTimestamp.isNotEmpty()) {
-                        Text(
-                            text = "Timestamp: $thermalTimestamp",
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                        
                         formattedThermalDate?.let {
                             Text(
-                                text = "Data: $it",
-                                modifier = Modifier.padding(top = 4.dp)
+                                text = "Térmica: $it",
+                                modifier = Modifier.padding(vertical = 2.dp)
                             )
                         }
                     }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .background(Color.LightGray),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Aguardando dados térmicos...",
-                            fontSize = 16.sp,
-                            color = Color.DarkGray
-                        )
-                    }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-fun ThermalMatrix(thermalData: FloatArray) {
-    // Encontrar valores mínimo e máximo para normalização
-    val minTemp = thermalData.minOrNull() ?: 0f
-    val maxTemp = thermalData.maxOrNull() ?: 50f
-    val range = maxTemp - minTemp
-    
-    // Criar grid 32x24
-    Column(modifier = Modifier.padding(8.dp)) {
-        for (y in 0 until 24) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                for (x in 0 until 32) {
-                    val index = y * 32 + x
-                    if (index < thermalData.size) {
-                        val value = thermalData[index]
-                        // Normalizar valor entre 0 e 1
-                        val normalizedValue = if (range > 0) (value - minTemp) / range else 0.5f
-                        
-                        // Criar cor usando mapa de calor (azul para baixo, vermelho para alto)
-                        val blue = (1 - normalizedValue).coerceIn(0f, 1f)
-                        val red = normalizedValue.coerceIn(0f, 1f)
-                        val green = (1 - Math.abs(2 * normalizedValue - 1)).coerceIn(0f, 1f) * 0.8f
-                        
-                        val color = Color(red, green, blue)
-                        
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .aspectRatio(1f)
-                                .padding(1.dp)
-                                .background(color)
-                        )
-                    }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(300.dp)
+                        .background(Color.LightGray),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Aguardando imagens para processamento...",
+                        fontSize = 16.sp,
+                        color = Color.DarkGray
+                    )
                 }
             }
         }

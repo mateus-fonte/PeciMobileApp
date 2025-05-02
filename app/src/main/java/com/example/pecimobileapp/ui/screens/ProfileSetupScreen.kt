@@ -10,10 +10,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.*
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.pecimobileapp.viewmodels.ProfileViewModel
-import com.example.pecimobileapp.viewmodels.ProfileViewModelFactory
+import com.example.pecimobileapp.ui.ProfileViewModel
+import com.example.pecimobileapp.viewmodels.*
 import java.util.*
 
 @Composable
@@ -48,26 +49,14 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                     Spacer(modifier = Modifier.height(8.dp))
 
                     OutlinedTextField(
-                        value = viewModel.apelido,
+                        value = viewModel.identificador,
                         onValueChange = {
+                            if (it.length <= 10) viewModel.identificador = it
+
                             if (it.length <= 10) viewModel.updateApelido(it)
-                        },
-                        label = { Text("Apelido (máx. 10 caracteres)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = viewModel.peso.toString(),
-                        onValueChange = {
-                            val peso = it.toFloatOrNull()
-                            if (peso != null && peso in 30f..200f) {
-                                viewModel.updatePeso(peso)
-                            }
                         },
-                        label = { Text("Peso (kg)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        label = { Text("Identificador (máx. 10 caracteres)") },
                         modifier = Modifier.fillMaxWidth()
                     )
 
