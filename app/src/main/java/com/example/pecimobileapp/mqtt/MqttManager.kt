@@ -55,33 +55,53 @@ object MqttManager {
     ) {
         connect()
         val timestamp = Instant.now().toEpochMilli()
-        val payload = """
-            {
-                "group_id": "$groupId",
-                "exercise_id": "$exerciseId",
-                "user_uid": "$userId",
-                "source": "$source",
-                "value": $value,
-                "timestamp": $timestamp
-            }
-        """.trimIndent()
+
+        val fullPayload = """
+        {
+            "group_id": "$groupId",
+            "exercise_id": "$exerciseId",
+            "user_uid": "$userId",
+            "source": "$source",
+            "value": $value,
+            "timestamp": $timestamp
+        }
+    """.trimIndent()
+
+        val rating = when (source) {
+            "ppg" -> if (value.toInt() in 60..120) 10 else 5
+            "avg_temp", "max_temp", "min_temp" -> if (value.toFloat() in 36.0..38.0) 10 else 6
+            else -> 0
+        }
+
+        val groupPayload = """
+        {
+            "group_id": "$groupId",
+            "exercise_id": "$exerciseId",
+            "user_uid": "$userId",
+            "rating": $rating,
+            "timestamp": $timestamp
+        }
+    """.trimIndent()
 
         val groupTopic = "/group/$groupId/data"
         val userTopic = "/user/$userId/data"
 
         try {
-            mqttClient.publishWith().topic(groupTopic)
-                .payload(payload.toByteArray(StandardCharsets.UTF_8))
-                .qos(MqttQos.AT_LEAST_ONCE)
-                .send()
             mqttClient.publishWith().topic(userTopic)
-                .payload(payload.toByteArray(StandardCharsets.UTF_8))
+                .payload(fullPayload.toByteArray(StandardCharsets.UTF_8))
                 .qos(MqttQos.AT_LEAST_ONCE)
                 .send()
 
-            Log.d(TAG, "Publicado em $groupTopic e $userTopic: $payload")
+            mqttClient.publishWith().topic(groupTopic)
+                .payload(groupPayload.toByteArray(StandardCharsets.UTF_8))
+                .qos(MqttQos.AT_LEAST_ONCE)
+                .send()
+
+            Log.d(TAG, "Publicado no userTopic: $userTopic → $fullPayload")
+            Log.d(TAG, "Publicado no groupTopic: $groupTopic → $groupPayload")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao publicar MQTT", e)
         }
     }
+
 }
