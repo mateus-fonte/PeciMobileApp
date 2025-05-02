@@ -6,6 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.services.WebSocketServerService
 import kotlinx.coroutines.flow.*
+import com.example.pecimobileapp.utils.OpenCVUtils
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -17,34 +19,26 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     private val webSocketServer = WebSocketServerService(application.applicationContext)
 
     // Observáveis para a UI
-    val isServerRunning: StateFlow<Boolean> =
-        webSocketServer.isRunning
-
-    val latestCameraImage: StateFlow<Pair<Bitmap?, String>> =
-        webSocketServer.latestCameraImage
-
-    val latestThermalData: StateFlow<Pair<FloatArray?, String>> =
-        webSocketServer.latestThermalData
-
-    val connectionStats: StateFlow<WebSocketServerService.ConnectionStats> =
-        webSocketServer.connectionStats
-
+    val isServerRunning: StateFlow<Boolean> = webSocketServer.isRunning
+    val latestCameraImage: StateFlow<Pair<Bitmap?, String>> = webSocketServer.latestCameraImage
+    val latestThermalData: StateFlow<Pair<FloatArray?, String>> = webSocketServer.latestThermalData
+    val connectionStats: StateFlow<WebSocketServerService.ConnectionStats> = webSocketServer.connectionStats
+    
+    // Imagem processada com OpenCV (com detecção facial e sobreposição térmica)
+    val processedImage: StateFlow<Pair<Bitmap?, List<OpenCVUtils.FaceData>>> = webSocketServer.processedImage
+    
     /**
      * Inicia o servidor WebSocket
      */
-    fun startServer(port: Int = 8080) {
-        viewModelScope.launch {
-            webSocketServer.startServer(port)
-        }
+    fun startServer(port: Int) = viewModelScope.launch {
+        webSocketServer.startServer(port)
     }
 
     /**
      * Para o servidor WebSocket
      */
-    fun stopServer() {
-        viewModelScope.launch {
-            webSocketServer.stopServer()
-        }
+    fun stopServer() = viewModelScope.launch {
+        webSocketServer.stopServer()
     }
 
     /**
