@@ -6,7 +6,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pecimobileapp.utils.OpenCVUtils
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
+import com.example.pecimobileapp.services.WebSocketServerService
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
@@ -53,11 +57,33 @@ fun WebSocketScreen(
     val thermalData by viewModel.latestThermalData.collectAsState()
     val connectionStats by viewModel.connectionStats.collectAsState()
     val processedImageData by viewModel.processedImage.collectAsState()
+    val serverState by viewModel.serverState.collectAsState()
     
     // Estados locais
     var port by remember { mutableStateOf("8080") }
+    var showHotspotAlert by remember { mutableStateOf(false) }
     
     val scrollState = rememberScrollState()
+
+    // Mostrar alerta se o hotspot não estiver ativo
+    if (showHotspotAlert) {
+        AlertDialog(
+            onDismissRequest = { showHotspotAlert = false },
+            title = { Text("Atenção") },
+            text = { 
+                Column {
+                    Text("O hotspot do dispositivo não está ativo.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Por favor, ative o hotspot e tente novamente.")
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showHotspotAlert = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -81,8 +107,14 @@ fun WebSocketScreen(
             connectionStats = connectionStats,
             port = port,
             onPortChange = { port = it },
-            onStartServer = { viewModel.startServer(port.toIntOrNull() ?: 8080) },
-            onStopServer = { viewModel.stopServer() }
+            onStartServer = { 
+                val result = viewModel.startServer(port.toIntOrNull() ?: 8080)
+                if (!result.first && result.second is WebSocketServerService.ServerState.HotspotNotActive) {
+                    showHotspotAlert = true
+                }
+            },
+            onStopServer = { viewModel.stopServer() },
+            serverState = serverState
         )
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -104,7 +136,8 @@ fun ConnectionInfoSection(
     port: String,
     onPortChange: (String) -> Unit,
     onStartServer: () -> Unit,
-    onStopServer: () -> Unit
+    onStopServer: () -> Unit,
+    serverState: WebSocketServerService.ServerState
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -115,6 +148,46 @@ fun ConnectionInfoSection(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+            // Aviso de Hotspot quando necessário
+            if (serverState is WebSocketServerService.ServerState.HotspotNotActive) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFFFF3E0)  // Cor de fundo laranja claro
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Filled.Warning,
+                                contentDescription = "Aviso",
+                                tint = Color(0xFFFF9800),  // Cor laranja
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Hotspot não ativo",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFE65100)  // Cor laranja escuro
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Por favor, ative o hotspot do seu dispositivo para continuar.",
+                            color = Color(0xFF795548)  // Cor marrom
+                        )
+                    }
+                }
+            }
+            
             // Status do servidor
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -145,20 +218,6 @@ fun ConnectionInfoSection(
                 Text(
                     text = "Endereço do servidor: ${connectionStats.serverAddress}",
                     modifier = Modifier.padding(vertical = 4.dp)
-                )
-            }
-            
-            // Todos os IPs do dispositivo
-            Text(
-                text = "Endereços IP disponíveis:",
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-            )
-            
-            connectionStats.allNetworkIPs.forEach { ip ->
-                Text(
-                    text = "• $ip",
-                    modifier = Modifier.padding(vertical = 2.dp)
                 )
             }
             
@@ -285,7 +344,7 @@ fun ProcessedImageSection(
                         faceData.forEachIndexed { index, face ->
                             if (!face.temperature.isNaN()) {
                                 Text(
-                                    text = "Rosto ${index + 1}: ${String.format("%.1f°C", face.temperature)}",
+                                    text = "Rosto ${index + 1}: ${String.format(Locale.getDefault(), "%.1f°C", face.temperature)}",
                                     modifier = Modifier.padding(vertical = 2.dp)
                                 )
                             }
@@ -301,7 +360,7 @@ fun ProcessedImageSection(
                 
                 // Mostrar timestamps das imagens
                 if (cameraTimestamp.isNotEmpty() || thermalTimestamp.isNotEmpty()) {
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     
                     Text(
                         text = "Informações de Timestamp:",
