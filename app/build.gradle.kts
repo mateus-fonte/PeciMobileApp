@@ -40,23 +40,39 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += listOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/license.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/notice.txt",
+                "META-INF/ASL2.0",
+                "META-INF/io.netty.versions.properties",
+                "META-INF/INDEX.LIST"
+            )
         }
     }
 }
 
 dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.5.4")
+    implementation("androidx.datastore:datastore-preferences:1.1.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
+    implementation("com.hivemq:hivemq-mqtt-client:1.3.0")
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.appcompat)
-    //implementation(libs.opencv.android)
+    
+    // OpenCV
+    implementation("com.quickbirdstudios:opencv:4.5.3.0")
 
     // WebSocket e processamento de imagens
     implementation("org.java-websocket:Java-WebSocket:1.5.3")
@@ -69,8 +85,4 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-//implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.4'
-    //implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
-    //implementation(libs.opencv.img)
-
 }

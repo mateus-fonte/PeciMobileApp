@@ -6,11 +6,13 @@ import android.graphics.BitmapFactory
 import android.net.wifi.WifiManager
 import android.util.Log
 import com.example.pecimobileapp.models.WebSocketData
+import com.example.pecimobileapp.utils.OpenCVUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
+import org.opencv.android.OpenCVLoader
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
@@ -28,6 +30,11 @@ class WebSocketServerService(private val context: Context) {
     private var port = DEFAULT_PORT
     private var server: ESPWebSocketServer? = null
     
+    // OpenCV
+    private val openCVUtils: OpenCVUtils by lazy {
+        OpenCVUtils(context)
+    }
+    
     // Para observar o estado da conexão
     private val _isRunning = MutableStateFlow(false)
     val isRunning: StateFlow<Boolean> = _isRunning
@@ -39,16 +46,30 @@ class WebSocketServerService(private val context: Context) {
     private val _latestThermalData = MutableStateFlow<Pair<FloatArray?, String>>(Pair(null, ""))
     val latestThermalData: StateFlow<Pair<FloatArray?, String>> = _latestThermalData
     
+    // Para armazenar a imagem processada com OpenCV
+    private val _processedImage = MutableStateFlow<Pair<Bitmap?, List<OpenCVUtils.FaceData>>>(Pair(null, emptyList()))
+    val processedImage: StateFlow<Pair<Bitmap?, List<OpenCVUtils.FaceData>>> = _processedImage
+    
     // Métricas de conexão
     private val _connectionStats = MutableStateFlow(ConnectionStats())
     val connectionStats: StateFlow<ConnectionStats> = _connectionStats
+    
+    init {
+        // Inicializar o OpenCV
+        if (!OpenCVLoader.initDebug()) {
+            Log.e(TAG, "Falha ao inicializar o OpenCV")
+        } else {
+            Log.d(TAG, "OpenCV inicializado com sucesso")
+        }
+    }
     
     // Classe para manter estatísticas de conexão
     data class ConnectionStats(
         val clientsCount: Int = 0,
         val receivedMessages: Int = 0,
         val serverAddress: String = "",
-        val allNetworkIPs: List<String> = listOf()
+        val allNetworkIPs: List<String> = listOf(),
+        val detectedFaces: Int = 0
     )
     
     /**
@@ -268,15 +289,54 @@ class WebSocketServerService(private val context: Context) {
                     val imageBytes = wsData.data as ByteArray
                     val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
                     _latestCameraImage.value = Pair(bitmap, wsData.getFormattedTimestamp())
+                    
+                    // Tentar processar a imagem com OpenCV se tivermos tanto a imagem quanto os dados térmicos
+                    processImageWithOpenCV()
                 }
                 
                 WebSocketData.DataType.THERMAL_DATA -> {
                     val thermalData = wsData.data as FloatArray
                     _latestThermalData.value = Pair(thermalData, wsData.getFormattedTimestamp())
+                    
+                    // Tentar processar a imagem com OpenCV se tivermos tanto a imagem quanto os dados térmicos
+                    processImageWithOpenCV()
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao processar dados binários", e)
+        }
+    }
+    
+    /**
+     * Processa a imagem da câmera com OpenCV e sobrepõe dados térmicos
+     */
+    private fun processImageWithOpenCV() {
+        val cameraImage = _latestCameraImage.value.first
+        val thermalData = _latestThermalData.value.first
+        
+        if (cameraImage != null) {
+            try {
+                // Processar a imagem com detecção facial e dados térmicos
+                Log.d(TAG, "Iniciando processamento de imagem com OpenCV")
+                val result = openCVUtils.processImagesWithFaceDetection(cameraImage, thermalData)
+                _processedImage.value = result
+                
+                // Atualiza as estatísticas de conexão
+                _connectionStats.value = _connectionStats.value.copy(
+                    detectedFaces = result.second.size
+                )
+                
+                Log.d(TAG, "Processamento de imagem concluído. Faces detectadas: ${result.second.size}")
+                
+                // Registrar temperaturas faciais
+                result.second.forEach { faceData ->
+                    if (!faceData.temperature.isNaN()) {
+                        Log.d(TAG, "Temperatura facial: ${String.format("%.1f°C", faceData.temperature)}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao processar imagem com OpenCV", e)
+            }
         }
     }
     
