@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
+import org.opencv.*
 import org.opencv.android.OpenCVLoader
 import java.net.InetAddress
 import java.net.InetSocketAddress
