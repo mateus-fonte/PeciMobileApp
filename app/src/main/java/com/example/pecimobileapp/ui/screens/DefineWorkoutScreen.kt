@@ -1,4 +1,3 @@
-
 package com.example.pecimobileapp.ui.screens
 
 import androidx.compose.foundation.background
@@ -124,15 +123,20 @@ fun DefineWorkoutScreen(navController: NavController) {
             OutlinedTextField(
                 value = groupNameInput,
                 onValueChange = {
-                    if (it.length <= 10 && it.all { c -> c.isLetter() }) {
+                    if (workoutMode == "criar") {
+                        if (it.length <= 10 && it.all { c -> c.isLetter() }) {
+                            groupNameInput = it
+                            showError = false
+                        } else {
+                            showError = true
+                        }
+                    } else {
                         groupNameInput = it
                         showError = false
-                    } else {
-                        showError = true
                     }
                 },
                 label = {
-                    Text(if (workoutMode == "criar") "Nome do grupo (máx. 10 letras)" else "Nome completo do grupo")
+                    Text(if (workoutMode == "criar") "Nome do grupo (máx. 10 letras)" else "Grupo: ")
                 },
                 isError = showError,
                 singleLine = true,
@@ -146,7 +150,7 @@ fun DefineWorkoutScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth()
             )
 
-            if (showError) {
+            if (showError && workoutMode == "criar") {
                 Text("Somente letras, até 10 caracteres.", color = MaterialTheme.colorScheme.error)
             }
 
@@ -165,11 +169,6 @@ fun DefineWorkoutScreen(navController: NavController) {
                 }
             }
 
-            if (groupFullName.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("O nome completo do grupo será:", style = MaterialTheme.typography.labelMedium)
-                Text(groupFullName, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))
