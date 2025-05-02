@@ -1,3 +1,6 @@
+package com.example.pecimobileapp.ui
+
+import androidx.compose.runtime.*
 package com.example.pecimobileapp.viewmodels
 
 import android.content.Context
@@ -14,7 +17,7 @@ import java.util.*
 class ProfileViewModel(private val context: Context) : ViewModel() {
 
     var nome by mutableStateOf("Maria")
-    var apelido by mutableStateOf("Sabinada")
+    var identificador by mutableStateOf("Sabinada") // antes: apelido
     var peso by mutableStateOf(62f)
     var anoNascimento by mutableStateOf(1992)
     var fcMaxManual by mutableStateOf<Int?>(null)
