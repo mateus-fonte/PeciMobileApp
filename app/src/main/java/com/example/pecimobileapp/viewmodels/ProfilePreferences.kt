@@ -14,7 +14,6 @@ object ProfilePreferences {
     // Chaves
     val nomeKey = stringPreferencesKey("nome")
     val apelidoKey = stringPreferencesKey("apelido")
-    val pesoKey = floatPreferencesKey("peso")
     val anoNascimentoKey = intPreferencesKey("ano_nascimento")
     val fcMaxManualKey = intPreferencesKey("fc_max_manual")
 
@@ -26,10 +25,6 @@ object ProfilePreferences {
 
     suspend fun saveApelido(context: Context, apelido: String) {
         context.dataStore.edit { it[apelidoKey] = apelido }
-    }
-
-    suspend fun savePeso(context: Context, peso: Float) {
-        context.dataStore.edit { it[pesoKey] = peso }
     }
 
     suspend fun saveAnoNascimento(context: Context, ano: Int) {
@@ -51,10 +46,6 @@ object ProfilePreferences {
 
     fun apelidoFlow(context: Context): Flow<String> = context.dataStore.data.map {
         it[apelidoKey] ?: "Sabinada"
-    }
-
-    fun pesoFlow(context: Context): Flow<Float> = context.dataStore.data.map {
-        it[pesoKey] ?: 62f
     }
 
     fun anoNascimentoFlow(context: Context): Flow<Int> = context.dataStore.data.map {
