@@ -11,15 +11,17 @@ import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 @Composable
 fun ConfigSection(viewModel: RealTimeViewModel) {
-    val serverIp by viewModel.serverAddress.collectAsState()
+    val apIp by viewModel.accessPointIp.collectAsState()
     var ssid by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var sent by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxWidth().padding(16.dp)) {
         if (!sent) {
-            Text("Servidor WS: $serverIp")
-            Spacer(Modifier.height(12.dp))
+            Text("IP do Servidor (AP):", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(apIp.ifEmpty { "-- sem IP encontrado --" },
+                style = MaterialTheme.typography.bodyLarge)
 
             OutlinedTextField(
                 value = ssid,

@@ -114,8 +114,8 @@ fun BottomNavScaffold() {
                 startDestination = "main",
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable("setup") { SetupScreen(vm, navController) }
-                composable("main") { MainScreen(vm) }
+                composable("setup") { SetupScreen(vm, navController, wsViewModel) }
+                composable("main") { MainScreen(vm, wsViewModel) }
                 composable("websocket") { WebSocketScreen(wsViewModel) }
                 composable("historico") {
                     HistoricoScreen(onBackClick = { navController.popBackStack() })
