@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.pecimobileapp.ui.theme.*
 import androidx.compose.foundation.rememberScrollState
+import com.example.pecimobileapp.viewmodels.ProfileViewModel
+
 
 fun encodeBase62(number: Long): String {
     val chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"

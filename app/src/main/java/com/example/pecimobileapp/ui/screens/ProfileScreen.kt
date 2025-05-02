@@ -2,20 +2,23 @@ package com.example.pecimobileapp.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pecimobileapp.ui.ProfileViewModel
+import com.example.pecimobileapp.viewmodels.ProfileViewModel
+import com.example.pecimobileapp.viewmodels.ProfileViewModelFactory
+
 
 @Composable
 fun ProfileScreen(navToEdit: () -> Unit = {}) {
-    val viewModel: ProfileViewModel = viewModel()
+    val context = LocalContext.current
+    val viewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(context))
 
     Surface(
         modifier = Modifier.fillMaxSize(),
