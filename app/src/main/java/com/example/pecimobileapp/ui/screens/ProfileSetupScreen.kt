@@ -10,7 +10,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.*
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pecimobileapp.ui.ProfileViewModel
@@ -51,10 +50,7 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                     OutlinedTextField(
                         value = viewModel.identificador,
                         onValueChange = {
-                            if (it.length <= 10) viewModel.identificador = it
-
                             if (it.length <= 10) viewModel.updateApelido(it)
-
                         },
                         label = { Text("Identificador (máx. 10 caracteres)") },
                         modifier = Modifier.fillMaxWidth()
@@ -65,10 +61,13 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                     OutlinedTextField(
                         value = viewModel.anoNascimento.toString(),
                         onValueChange = {
-                            val ano = it.toIntOrNull()
-                            val anoAtual = Calendar.getInstance().get(Calendar.YEAR)
-                            if (ano != null && ano in 1920..anoAtual) {
-                                viewModel.updateAnoNascimento(ano)
+                            // Verifica se o valor é válido (número e dentro do intervalo)
+                            if (it.isEmpty() || it.toIntOrNull() != null) {
+                                val ano = it.toIntOrNull()
+                                val anoAtual = Calendar.getInstance().get(Calendar.YEAR)
+                                if (ano != null && ano in 1920..anoAtual) {
+                                    viewModel.updateAnoNascimento(ano)
+                                }
                             }
                         },
                         label = { Text("Ano de Nascimento") },

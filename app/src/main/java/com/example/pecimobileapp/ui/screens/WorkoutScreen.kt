@@ -23,7 +23,7 @@ import com.example.pecimobileapp.network.MqttManagerImpl
 import kotlinx.coroutines.delay
 import org.json.JSONObject
 import com.example.pecimobileapp.ui.ProfileViewModel
-import com.example.pecimobileapp.viewmodels.ProfileViewModel
+import com.example.pecimobileapp.viewmodels.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 val zoneColors = mapOf(
