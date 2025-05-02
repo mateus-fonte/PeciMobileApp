@@ -1,9 +1,8 @@
-import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
-
 plugins {
     id("com.android.application")
     kotlin("android")
     kotlin("kapt")
+    id("org.jetbrains.kotlin.plugin.compose") version "2.0.0" // ✅ compatível com Kotlin 2.0.0
 }
 
 android {
@@ -47,7 +46,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.10"
+        kotlinCompilerExtensionVersion = "2.0.0" // ✅ mesma versão do plugin
     }
 
     packaging {
@@ -63,33 +62,24 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.activity:activity-compose:1.8.2")
 
-    implementation ("com.hivemq:hivemq-mqtt-client:1.3.0")
-    implementation ("org.json:json:20210307")
+    // MQTT e JSON
+    implementation("com.hivemq:hivemq-mqtt-client:1.3.0")
+    implementation("org.json:json:20210307")
 
+    // Jetpack Compose (📌 considere atualizar essas versões para garantir compatibilidade com Kotlin 2.0.0)
+    implementation("androidx.compose.ui:ui:1.6.0")
+    implementation("androidx.compose.material3:material3:1.2.1")
+    implementation("androidx.compose.ui:ui-tooling-preview:1.6.0")
+    debugImplementation("androidx.compose.ui:ui-tooling:1.6.0")
 
-    // Jetpack Compose
-    implementation("androidx.compose.ui:ui:1.5.4")
-    implementation("androidx.compose.material3:material3:1.2.0")
-    implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
+    // Navigation (ajuste conforme o seu `libs.versions.toml`)
     implementation(libs.androidx.navigation.runtime.android)
     implementation(libs.androidx.navigation.runtime.desktop)
     implementation(libs.androidx.navigation.runtime.jvmstubs)
-    debugImplementation("androidx.compose.ui:ui-tooling:1.5.4")
 
-    // ViewModel + Compose
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
-
-    // DataStore Preferences
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
-
-    // Kotlin Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-
-    // Testing
+    // Testes
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.5.4")
-    debugImplementation("androidx.compose.ui:ui-test-manifest:1.5.4")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.6.0")
 }
