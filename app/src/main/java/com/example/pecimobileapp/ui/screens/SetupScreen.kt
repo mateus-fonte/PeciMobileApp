@@ -20,7 +20,7 @@ fun SetupScreen(
     val ppgResults   by viewModel.scanResultsPpg.collectAsState()
     val camResults   by viewModel.scanResultsCam.collectAsState()
     val ppgConnected by viewModel.isPpgConnected.collectAsState()
-    val useBle        by viewModel.isCamConnected.collectAsState()
+    val useBle        by viewModel.isCamConnected.collectAsState() // Use BLE for the condition
     val useWs         by wsViewModel.isWsConnected.collectAsState()
     val ready        by viewModel.readyToStart.collectAsState()
 
@@ -30,6 +30,7 @@ fun SetupScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
+        // Seção para a conexão do PPG/Smartwatch
         BleConnectionSection(
             title       = "PPG / Smartwatch",
             scanResults = ppgResults,
@@ -40,6 +41,7 @@ fun SetupScreen(
 
         Spacer(Modifier.height(24.dp))
 
+        // Seção para a conexão da Câmera Térmica (não obrigatória para iniciar)
         BleConnectionSection(
             title       = "Câmera Térmica",
             scanResults = camResults,
@@ -48,18 +50,20 @@ fun SetupScreen(
             onConnect   = { viewModel.connectCam(it) }
         )
 
-        if (useBle) {
+        // Configurações habilitadas se a conexão com o PPG/Smartwatch ou WebSocket estiver ativa
+        if (ppgConnected || useWs) { // Agora depende apenas do PPG/Smartwatch ou WebSocket
             ConfigSection(viewModel)
-            if (useWs){
+            if (useWs) {
                 Text(
                     text = "Câmera térmica conectada por Wifi!",
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(8.dp)
                 )
             }
-        } else if (!useWs) {
+        } else {
+            // Se o PPG/Smartwatch não estiver conectado
             Text(
-                "Conecte a câmera térmica por bluetooth para habilitar configurações",
+                "Conecte o PPG/Smartwatch para habilitar configurações",
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodyMedium
             )
@@ -67,9 +71,10 @@ fun SetupScreen(
 
         Spacer(Modifier.height(32.dp))
 
+        // Botão para iniciar a atividade física habilitado apenas se o PPG/Smartwatch estiver conectado
         Button(
             onClick = { navController.navigate("define_workout") },
-            enabled = ready,
+            enabled = ppgConnected, // Agora só depende da conexão com o PPG/Smartwatch
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Iniciar Atividade Física")
