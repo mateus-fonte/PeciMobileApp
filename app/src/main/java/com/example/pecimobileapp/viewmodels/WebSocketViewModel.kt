@@ -2,7 +2,6 @@ package com.example.pecimobileapp.viewmodels
 
 import android.app.Application
 import android.graphics.Bitmap
-import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.services.WebSocketServerService
@@ -310,37 +309,14 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             
             // Monitorar o status do envio das configurações
             android.util.Log.d("WebSocketViewModel", "Monitorando status do envio de configurações...")
-            var configSent = false
-            var timeout = 0
-            while (!configSent && timeout < 30) { // 30 segundos de timeout
-                configSent = bleManager.allConfigSent.value
-                android.util.Log.d("WebSocketViewModel", "Status de configuração: ${if (configSent) "ENVIADO" else "AGUARDANDO"} (${timeout}s)")
-                if (configSent) break
+            
+            // Aguardar até que as configurações sejam enviadas
+            while (!bleManager.allConfigSent.value) {
+                android.util.Log.d("WebSocketViewModel", "Status de configuração: AGUARDANDO")
                 kotlinx.coroutines.delay(1000)
-                timeout++
             }
             
-            if (!configSent) {
-                android.util.Log.d("WebSocketViewModel", "⚠️ ERRO: Timeout ao enviar configurações para ESP32")
-                _wifiConfigStatus.value = WifiConfigStatus.Failed("Timeout ao enviar configurações")
-                
-                // Mostrar Toast informando sobre o timeout
-                Toast.makeText(
-                    getApplication(),
-                    "Timeout: Não foi possível enviar as configurações para a câmera térmica. Tente novamente.",
-                    Toast.LENGTH_LONG
-                ).show()
-                
-                bleProgressJob.cancel()
-                
-                // Resetar o progresso para a próxima tentativa após um curto delay
-                viewModelScope.launch {
-                    delay(5000) // Esperar 5 segundos para que o usuário veja a mensagem de erro
-                    _setupProgress.value = 0f
-                }
-                
-                return@launch
-            }
+            android.util.Log.d("WebSocketViewModel", "Status de configuração: ENVIADO")
             
             // Configuração BLE enviada com sucesso, avançamos para 60%
             _setupProgress.value = 0.6f
@@ -362,40 +338,15 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                     _setupProgress.value = 0.8f
                     
                     // Observar o recebimento da primeira imagem
-                    val imageMonitorJob = viewModelScope.launch {
+                    viewModelScope.launch {
                         // Espera pela primeira imagem
                         latestCameraImage.collect { (bitmap, _) ->
                             if (bitmap != null && _setupProgress.value < 1f) {
                                 // Imagem recebida, progresso completo
                                 _setupProgress.value = 1f
                                 android.util.Log.d("WebSocketViewModel", "✅ Primeira imagem recebida, configuração completa!")
-                                // Cancelar este job explicitamente em vez de cancelar do contexto do coletor
                                 return@collect
                             }
-                        }
-                    }
-                    
-                    // Registrar um manipulador para cancelar o job após um timeout se necessário
-                    viewModelScope.launch {
-                        delay(60000) // Timeout de 60 segundos
-                        if (imageMonitorJob.isActive) {
-                            imageMonitorJob.cancel()
-                            android.util.Log.d("WebSocketViewModel", "⚠️ Timeout ao esperar pela primeira imagem")
-                            
-                            // Mostrar Toast informando sobre o timeout
-                            Toast.makeText(
-                                getApplication(),
-                                "Timeout: Não foi possível receber imagens da câmera térmica. Verifique se o dispositivo está conectado corretamente.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            
-                            // Atualizar o status de configuração para falha
-                            _wifiConfigStatus.value = WifiConfigStatus.Failed("Timeout ao aguardar imagens da câmera")
-                            
-                            // Resetar o progresso para a próxima tentativa após um curto delay
-                            // Isso permitirá que a UI mostre o estado de erro antes de resetar
-                            delay(5000) // Esperar 5 segundos para que o usuário veja a mensagem de erro
-                            _setupProgress.value = 0f
                         }
                     }
                 } else {
