@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +32,11 @@ fun SetupScreen(
     val useBle       by viewModel.isCamConnected.collectAsState()
     val useWs        by wsViewModel.isWsConnected.collectAsState()
     val ready        by viewModel.readyToStart.collectAsState()
+    
+    // Coletar o progresso da configuração
+    val setupProgress by wsViewModel.setupProgress.collectAsState()
+    // Coletar o status da configuração WiFi
+    val wifiConfigStatus by wsViewModel.wifiConfigStatus.collectAsState()
 
     Column(
         Modifier
@@ -82,6 +90,142 @@ fun SetupScreen(
                 }
             }
         )
+
+        // Adicionando a barra de progresso de configuração
+        if (setupProgress > 0f && setupProgress < 1f) {
+            Spacer(Modifier.height(16.dp))
+            
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Configurando WiFi e Servidor",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    LinearProgressIndicator(
+                        progress = setupProgress,
+                        modifier = Modifier.fillMaxWidth().height(8.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Texto explicativo baseado no progresso atual
+                    val statusText = when {
+                        setupProgress < 0.4f -> "Enviando configurações WiFi..."
+                        setupProgress < 0.6f -> "Configurando rede WiFi..."
+                        setupProgress < 0.8f -> "Iniciando servidor WebSocket..."
+                        else -> "Aguardando conexão da câmera..."
+                    }
+                    
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        } else if (setupProgress >= 1f) {
+            Spacer(Modifier.height(16.dp))
+            
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = "Configuração concluída",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    Text(
+                        text = "Configuração WiFi concluída com sucesso!",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        } 
+        // Mostrar mensagem de erro quando a configuração falhar
+        else if (wifiConfigStatus is WebSocketViewModel.WifiConfigStatus.Failed) {
+            Spacer(Modifier.height(16.dp))
+            
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Error,
+                        contentDescription = "Erro na configuração",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    Column {
+                        Text(
+                            text = "Erro na configuração WiFi",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+                        
+                        // Mostrar a mensagem específica do erro
+                        Text(
+                            text = (wifiConfigStatus as WebSocketViewModel.WifiConfigStatus.Failed).reason,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Botão para tentar novamente
+                Button(
+                    onClick = {
+                        // Tentar configurar novamente com os mesmos parâmetros
+                        val bleManager = viewModel.getBleManager()
+                        if (bleManager != null) {
+                            // Exibe diálogo para inserir SSID e senha novamente
+                            wsViewModel.prepareRetry()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Tentar Novamente")
+                }
+            }
+        }
 
         Spacer(Modifier.height(24.dp))
 

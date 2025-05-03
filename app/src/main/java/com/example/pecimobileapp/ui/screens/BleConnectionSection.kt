@@ -70,7 +70,8 @@ fun BleConnectionSection(
                     Button(
                         onClick = { 
                             Log.d("BleConnectionSection", "Botão de opções avançadas clicado")
-                            showAdvancedOptionsDialog = true 
+                            // Abrir diretamente o diálogo de configuração WiFi
+                            showWifiCredentialsDialog = true 
                         },
                         modifier = Modifier.padding(start = 8.dp)
                     ) {
@@ -81,7 +82,8 @@ fun BleConnectionSection(
         }
     }
     
-    // Diálogo de opções avançadas
+    // Comentando o diálogo de opções avançadas que não será mais utilizado
+    /*
     if (showAdvancedOptionsDialog) {
         AlertDialog(
             onDismissRequest = { showAdvancedOptionsDialog = false },
@@ -109,6 +111,7 @@ fun BleConnectionSection(
             }
         )
     }
+    */
     
     // Diálogo para inserir credenciais WiFi
     if (showWifiCredentialsDialog) {

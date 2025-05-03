@@ -70,6 +70,13 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private val _allConfigSent = MutableStateFlow(false)
     val allConfigSent: StateFlow<Boolean> = _allConfigSent
 
+    // Novo estado para progresso da configuração
+    private val _configProgress = MutableStateFlow(0f)
+    val configProgress: StateFlow<Float> = _configProgress
+    
+    // Total de passos de configuração (escrita BLE, início do servidor, conexão de câmera)
+    private val totalConfigSteps = 5
+
     private val writeQueue = ArrayDeque<Pair<UUID, ByteArray>>()
     private var lastDevice: BluetoothDevice? = null
     private var retryCount = 0
@@ -248,8 +255,15 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
         val uuid = characteristic.uuid
         val success = status == BluetoothGatt.GATT_SUCCESS
-        Handler(Looper.getMainLooper()).post {
-            Toast.makeText(context, "Write $uuid → ${if (success) "OK" else "ERRO $status"}", Toast.LENGTH_SHORT).show()
+        
+        // Incrementar o progresso em vez de mostrar Toast
+        if (success) {
+            // Incrementa o progresso baseado em quantos itens já foram processados
+            val step = 1f / totalConfigSteps
+            val currentProgress = _configProgress.value
+            _configProgress.value = currentProgress + step
+            
+            Log.d(TAG, "Configuração BLE: progresso atualizado para ${_configProgress.value * 100}%")
         }
 
         if (writeQueue.firstOrNull()?.first == uuid) {
