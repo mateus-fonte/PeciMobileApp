@@ -72,18 +72,6 @@ fun BottomNavScaffold() {
                     )
                 )
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.WifiTethering, contentDescription = "ESP32") },
-                    label = { Text("ESP32") },
-                    selected = currentRoute == "websocket",
-                    onClick = { navController.navigate("websocket") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.White,
-                        unselectedIconColor = Color.LightGray,
-                        selectedTextColor = Color.White,
-                        unselectedTextColor = Color.LightGray
-                    )
-                )
-                NavigationBarItem(
                     icon = { Icon(Icons.Default.Star, contentDescription = "Histórico") },
                     label = { Text("Histórico") },
                     selected = currentRoute == "historico",
