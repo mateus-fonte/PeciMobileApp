@@ -229,25 +229,33 @@ fun SetupScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        // ⚙️ Seção de configuração da câmera térmica (Wi-Fi), visível se PPG ou WebSocket estiverem ativos
+        // ⚙️ Seção de configuração da câmera térmica (Wi-Fi), visível se PPG estiver ativo
         if (ppgConnected || useWs) {
+            // Título da seção
             Text(
-                text = "Configurar Wi-Fi da Câmera Térmica",
+                text = "Câmera Térmica",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            ConfigSection(viewModel)
-
             if (useWs) {
+                // Quando a câmera estiver conectada via Wi-Fi, mostra apenas a mensagem de sucesso
                 Text(
                     text = "✓ Câmera térmica conectada por Wi-Fi!",
                     style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(8.dp)
                 )
                 
                 // Exibir imagem da câmera térmica
                 ThermalCameraPreview(wsViewModel)
+            } else {
+                // Mensagem explicativa quando não conectado via Wi-Fi
+                Text(
+                    text = "Configure a câmera térmica via Bluetooth para ativar a visualização.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(8.dp)
+                )
             }
         } else {
             // 🚫 Caso o PPG ainda não esteja conectado
