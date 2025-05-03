@@ -1,3 +1,4 @@
+// MqttManager.kt
 package com.example.pecimobileapp.mqtt
 
 import android.os.Build
@@ -85,44 +86,41 @@ object MqttManager {
         userId: String,
         exerciseId: String,
         source: String,
-        value: Number
+        value: Number,
+        selectedZone: Int,
+        zonas: List<Pair<String, IntRange>>
     ) {
         connect()
         val timestamp = Instant.now().toEpochMilli()
 
-        val fullPayload = """
-            {
-                "group_id": "$groupId",
-                "exercise_id": "$exerciseId",
-                "user_uid": "$userId",
-                "source": "$source",
-                "value": $value,
-                "timestamp": $timestamp
-            }
-        """.trimIndent()
-
-        val rating = when (source) {
-            "ppg" -> if (value.toInt() in 60..120) 10 else 5
-            "avg_temp", "max_temp", "min_temp" -> if (value.toFloat() in 36.0..38.0) 10 else 6
-            else -> 0
+        val sensorPayload = JSONObject().apply {
+            put("group_id", groupId)
+            put("exercise_id", exerciseId)
+            put("user_uid", userId)
+            put("source", source)
+            put("value", value.toDouble())  // <-- Corrigido aqui
+            put("timestamp", timestamp)
         }
 
-        val groupPayload = """
-            {
-                "group_id": "$groupId",
-                "exercise_id": "$exerciseId",
-                "user_uid": "$userId",
-                "rating": $rating,
-                "timestamp": $timestamp
-            }
-        """.trimIndent()
+        val currentZone = WorkoutSessionManager.calculateCurrentZone(value.toInt(), zonas)
+        WorkoutSessionManager.incrementTime(source, currentZone, selectedZone)
 
-        val groupTopic = "/group/$groupId/data"
-        val userTopic = "/user/$userId/data"
+        val rating = WorkoutSessionManager.getExecutionPercentage()
+
+        val ratingPayload = JSONObject().apply {
+            put("group_id", groupId)
+            put("exercise_id", exerciseId)
+            put("user_uid", userId)
+            put("rating", rating.toDouble())  // <-- Corrigido aqui
+            put("timestamp", timestamp)
+        }
+
+        val topicGroup = "/group/$groupId/data"
+        val topicUser = "/user/$userId/data"
 
         try {
-            publish(userTopic, fullPayload)
-            publish(groupTopic, groupPayload)
+            publish(topicUser, sensorPayload.toString())
+            publish(topicGroup, ratingPayload.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao publicar MQTT", e)
         }
@@ -133,88 +131,33 @@ object MqttManager {
         private var elapsedSeconds = 0
         private var timeInZone = 0
         private var lastZone: Int = 0
-        private var executionPercentage: Float = 0f
-        private var positionCallback: ((Int) -> Unit)? = null
+        private var executionPct: Float = 0f
 
         fun resetSession() {
             elapsedSeconds = 0
             timeInZone = 0
-            executionPercentage = 0f
+            executionPct = 0f
             lastZone = 0
         }
 
-        fun updateSession(
-            heartRate: Int?,
-            selectedZone: Int,
-            zonas: List<Pair<String, IntRange>>,
-            groupId: String,
-            userId: String
-        ): Float {
+        fun incrementTime(source: String, currentZone: Int, selectedZone: Int) {
             elapsedSeconds++
-
-            val currentZone = calculateCurrentZone(heartRate, zonas)
             lastZone = currentZone
-
-            if (isHeartRateInZone(heartRate, selectedZone, zonas)) {
+            if (currentZone == selectedZone) {
                 timeInZone++
             }
-
-            if (elapsedSeconds % 60 == 0) {
-                executionPercentage = (timeInZone.toFloat() / elapsedSeconds * 100)
-                publishExecution(groupId, userId, executionPercentage)
-            }
-
-            return executionPercentage
+            executionPct = (timeInZone.toFloat() / elapsedSeconds * 100)
         }
 
-        private fun publishExecution(groupId: String, userId: String, execPct: Float) {
-            val payload = """
-                {
-                    "timestamp": ${Instant.now().epochSecond},
-                    "id": "$userId",
-                    "exec_pct": $execPct,
-                    "grupo": "$groupId"
-                }
-            """.trimIndent()
-
-            val topic = "grupo/execucao"
-            try {
-                connect()
-                publish(topic, payload)
-            } catch (e: Exception) {
-                Log.e("WorkoutSession", "Erro ao publicar execucao", e)
-            }
-        }
-
-        fun subscribePositionUpdates(groupId: String, userId: String, onPositionUpdate: (Int) -> Unit) {
-            positionCallback = onPositionUpdate
-            val topic = "grupo/posicao"
-
-            connect()
-            subscribe(topic) { message ->
-                try {
-                    val json = JSONObject(message)
-                    if (json.getString("id") == userId) {
-                        val position = json.getInt("position")
-                        positionCallback?.invoke(position)
-                    }
-                } catch (e: Exception) {
-                    Log.e("WorkoutSession", "Erro ao processar ranking", e)
-                }
-            }
-        }
-
-        private fun isHeartRateInZone(hr: Int?, selectedZone: Int, zonas: List<Pair<String, IntRange>>): Boolean {
-            val faixa = zonas.getOrNull(selectedZone - 1)?.second
-            return hr != null && faixa?.contains(hr) == true
-        }
+        fun getExecutionPercentage(): Float = executionPct
 
         fun calculateCurrentZone(hr: Int?, zonas: List<Pair<String, IntRange>>): Int {
+            if (zonas.isEmpty()) return 0
             return hr?.let { bpm ->
                 zonas.indexOfFirst { bpm in it.second }.let {
                     when {
                         it == -1 && bpm < zonas.first().second.first -> 0
-                        it == -1 && bpm > zonas.last().second.last -> 5
+                        it == -1 && bpm > zonas.last().second.last -> zonas.size + 1
                         else -> it + 1
                     }
                 }
