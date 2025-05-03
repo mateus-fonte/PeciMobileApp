@@ -1,13 +1,8 @@
-
 package com.example.pecimobileapp.ui.navigation
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.WifiTethering
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -16,7 +11,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
-import com.example.pecimobileapp.network.MqttManagerImpl
+import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
@@ -144,9 +139,7 @@ fun BottomNavScaffold() {
                     val isGroup = groupParam != "false"
                     val groupName = if (isGroup) groupParam else null
 
-                    val mqttManager = remember(isGroup) {
-                        if (isGroup) MqttManagerImpl() else null
-                    }
+                    val mqttManager = if (isGroup) MqttManager else null
 
                     WorkoutScreen(
                         navController = navController,
