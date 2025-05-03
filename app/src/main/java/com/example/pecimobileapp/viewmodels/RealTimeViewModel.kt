@@ -14,10 +14,8 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
     private val blePpg = BleManager(app)
     private val bleCam = BleManager(app)
 
-    // servidor WS para obter o IP
-    private val wsService = WebSocketServerService(app).apply {
-        startServer()
-    }
+    // servidor WS para obter o IP - não iniciamos automaticamente
+    private val wsService = WebSocketServerService(app)
 
     // 1) ScanResults separados
     val scanResultsPpg: StateFlow<List<ScanResult>> = blePpg.scanResults
@@ -42,24 +40,11 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
 
-    /** ❶ lista crua de "IP (interface)" */
-    val allNetworkIPs: StateFlow<List<String>> =
-        wsService.connectionStats
-            .map { it.allNetworkIPs }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /** ❷ extrai só o IP da interface de Wi-Fi (wlan0) ou fallback vazio */
-    val accessPointIp: StateFlow<String> =
-        allNetworkIPs
-            .map { list ->
-                list.firstOrNull { entry ->
-                    // ajusta aqui o nome da interface que for seu AP — ex: "wlan" ou "ap"
-                    entry.contains("(ap") && entry.length <= 22
-                }?.substringBefore(" ")
-                // substringBefore(" ") pega tudo antes do espaço, i.e. só o IP sem "(..."
-                    ?: ""
-            }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+    /** ❶ IP do dispositivo para conectividade */
+    val accessPointIp: StateFlow<String> = flow {
+        // Obtém o IP diretamente sem iniciar o servidor
+        emit(wsService.getDeviceIpAddress())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
     // UI triggers
     fun startPpgScan() = viewModelScope.launch { blePpg.startScan() }
@@ -77,6 +62,9 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         bleCam.sendAllConfigs(ssid, password, ip)
     }
 
-
+    /** Retorna o BleManager da câmera térmica para uso com WebSocketViewModel */
+    fun getBleManager(): BleManager {
+        return bleCam
+    }
 
 }
