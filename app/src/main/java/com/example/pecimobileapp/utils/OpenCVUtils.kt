@@ -229,26 +229,26 @@ class OpenCVUtils(private val context: Context) {
                     // para reduzir a densidade da sobreposição
                     if (normalizedTemp > 0.3f) {
                         // Converte para cor (azul para valores baixos, vermelho para altos)
-                        val color = getColorForTemperature(normalizedTemp)
-                        
-                        // Define a cor do pincel
-                        paint.color = color
-                        
-                        // Desenha o retângulo correspondente na imagem
+                    val color = getColorForTemperature(normalizedTemp)
+                    
+                    // Define a cor do pincel
+                    paint.color = color
+                    
+                    // Desenha o retângulo correspondente na imagem
                         // Usando espaçamento entre os blocos para mostrar mais da imagem original
                         canvas.drawRect(
                             x * blockWidth + 1,
                             y * blockHeight + 1,
                             (x + 1) * blockWidth - 1,
                             (y + 1) * blockHeight - 1,
-                            paint
-                        )
+                        paint
+                    )
                     }
                 }
             }
         }
         
-        // Desenha uma legenda de cores
+                // Desenha uma legenda de cores
         drawThermalLegend(canvas, minTemp, maxTemp, bitmap.width, bitmap.height)
     }
     
@@ -341,7 +341,7 @@ class OpenCVUtils(private val context: Context) {
     private fun drawThermalLegend(canvas: Canvas, minTemp: Float, maxTemp: Float, width: Int, height: Int) {
         val paint = Paint().apply {
             style = Paint.Style.FILL
-        }
+                    }
         
         val textPaint = Paint().apply {
             color = Color.WHITE
@@ -359,7 +359,7 @@ class OpenCVUtils(private val context: Context) {
         // Desenha a barra de cores
         for (i in 0 until legendWidth) {
             val normalizedTemp = i.toFloat() / legendWidth
-            paint.color = getColorForTemperature(normalizedTemp)
+                        paint.color = getColorForTemperature(normalizedTemp)
             canvas.drawRect(
                 legendX + i.toFloat(),
                 legendY.toFloat(),

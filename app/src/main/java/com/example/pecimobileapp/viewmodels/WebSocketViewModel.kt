@@ -29,6 +29,9 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     // Serviço WebSocket
     private val webSocketServer = WebSocketServerService(application.applicationContext)
 
+    // Armazena a última temperatura válida do rosto principal
+    private var lastValidFaceTemperature: Float = 0f
+
     // Estado do servidor
     private val _serverState = MutableStateFlow<WebSocketServerService.ServerState>(WebSocketServerService.ServerState.Stopped)
     val serverState: StateFlow<WebSocketServerService.ServerState> = _serverState
@@ -372,5 +375,53 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     fun prepareRetry() {
         _wifiConfigStatus.value = WifiConfigStatus.NotConfigured
         _setupProgress.value = 0f
+    }
+    
+    /**
+     * Retorna a temperatura do maior rosto detectado (considerando a área do rosto)
+     * Se nenhum rosto for detectado, retorna a última temperatura válida medida
+     * @return temperatura do maior rosto ou a última temperatura válida
+     */
+    fun getLargestFaceTemperature(): Float {
+        val faceData = processedImage.value.second
+        val bitmap = processedImage.value.first
+        
+        // Se não houver dados de rosto ou a imagem, retorna a última temperatura válida
+        if (faceData.isEmpty() || bitmap == null) {
+            return lastValidFaceTemperature
+        }
+        
+        // Tamanho mínimo em pixels para considerar um rosto como "próximo" (aproximadamente 3 palmos)
+        // Aumentando este valor para detectar apenas rostos realmente próximos
+        val MIN_FACE_AREA = if (bitmap.width > 640) 25000 else 12500 // Valores aumentados para maior rigor
+        
+        // Filtrar rostos por:
+        // 1. Temperatura normal humana (35°C a 40°C)
+        // 2. Tamanho do rosto (para garantir proximidade)
+        val validFaces = faceData.filter { face ->
+            val area = face.width * face.height
+            val isValidTemperature = face.temperature in 35.0f..40.0f
+            val isCloseEnough = area >= MIN_FACE_AREA
+            
+            // Logar para depuração
+            android.util.Log.d("FaceDetection", 
+                "Rosto: ${face.x},${face.y} - Área: $area px² - Temp: ${face.temperature}°C - " +
+                "Válido: ${isValidTemperature && isCloseEnough}")
+            
+            isValidTemperature && isCloseEnough
+        }
+        
+        if (validFaces.isNotEmpty()) {
+            // Encontrar o rosto válido com a maior área (o mais próximo)
+            val largestValidFace = validFaces.maxByOrNull { it.width * it.height }
+            
+            if (largestValidFace != null) {
+                lastValidFaceTemperature = largestValidFace.temperature
+                return largestValidFace.temperature
+            }
+        }
+        
+        // Se não encontrou rostos válidos, retorna a última temperatura válida
+        return lastValidFaceTemperature
     }
 }

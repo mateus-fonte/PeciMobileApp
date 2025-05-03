@@ -409,12 +409,21 @@ fun ThermalCameraPreview(wsViewModel: WebSocketViewModel) {
                 
                 // Mostrar informações sobre rostos detectados
                 if (faceData.isNotEmpty()) {
-                    val maxTemp = faceData.maxByOrNull { it.temperature }?.temperature ?: 0f
+                    // Encontrar o rosto com a maior área (provavelmente o mais próximo)
+                    val largestFace = faceData.maxByOrNull { it.width * it.height }
                     
-                    // Mostrar a contagem de faces e a temperatura máxima detectada
+                    // Obter a temperatura do maior rosto
+                    val largestFaceTemp = largestFace?.temperature ?: 0f
+                    
+                    // Texto a ser exibido com informações sobre a detecção
+                    val displayText = if (faceData.size == 1) {
+                        "1 pessoa detectada (Temp: ${String.format("%.1f°C", largestFaceTemp)})"
+                    } else {
+                        "${faceData.size} pessoas detectadas (Temp. do rosto principal: ${String.format("%.1f°C", largestFaceTemp)})"
+                    }
+                    
                     Text(
-                        text = "${faceData.size} ${if (faceData.size == 1) "pessoa detectada" else "pessoas detectadas"} " +
-                              "(Temp. máx: ${String.format("%.1f°C", maxTemp)})",
+                        text = displayText,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                         textAlign = TextAlign.Center,
