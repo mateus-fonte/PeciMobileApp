@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.ui.ProfileViewModel
+import com.example.pecimobileapp.viewmodels.ProfileViewModelFactory
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 
 val zoneColors = mapOf(
@@ -45,7 +47,8 @@ fun WorkoutScreen(
     isGroup: Boolean = false,
     mqttManager: MqttManager? = null
 ) {
-    val profileViewModel: ProfileViewModel = viewModel()
+    val context = LocalContext.current
+    val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(context))
 
     val identificador = profileViewModel.identificador
     val zonas = profileViewModel.zonas
