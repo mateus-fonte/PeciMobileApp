@@ -6,19 +6,72 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
+
+/**
+ * Ícones customizados para representar funcionalidades específicas
+ */
+@Composable
+fun HeartEcgIcon(tint: Color = LocalContentColor.current, size: Dp = 24.dp) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = "Coração",
+            tint = tint,
+            modifier = Modifier.size(size)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.Filled.ShowChart,
+            contentDescription = "Eletrocardiograma",
+            tint = tint,
+            modifier = Modifier.size(size)
+        )
+    }
+}
+
+@Composable
+fun CameraThermometerIcon(tint: Color = LocalContentColor.current, size: Dp = 24.dp) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = Icons.Filled.CameraAlt,
+            contentDescription = "Câmera",
+            tint = tint,
+            modifier = Modifier.size(size)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.Filled.Thermostat,
+            contentDescription = "Termômetro",
+            tint = tint,
+            modifier = Modifier.size(size)
+        )
+    }
+}
+
+@Composable
+fun BicycleIcon(tint: Color = LocalContentColor.current, size: Dp = 24.dp) {
+    Icon(
+        imageVector = Icons.Filled.DirectionsBike,
+        contentDescription = "Pessoa andando de bicicleta",
+        tint = tint,
+        modifier = Modifier.size(size)
+    )
+}
 
 @Composable
 fun SetupScreen(
@@ -38,243 +91,279 @@ fun SetupScreen(
     // Coletar o status da configuração WiFi
     val wifiConfigStatus by wsViewModel.wifiConfigStatus.collectAsState()
 
-    Column(
-        Modifier
+    // Definindo cores personalizadas
+    val purpleButtonColor = Color(0xFF9C64A6) // Cor roxa clara como estava anteriormente
+    val startButtonColor = MaterialTheme.colorScheme.primary
+
+    Box(
+        modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(bottom = 16.dp) // Reduzido para deixar menos espaço entre o conteúdo e o botão
     ) {
-        // 🔌 Seção de conexão com o dispositivo PPG / Smartwatch via BLE
-        BleConnectionSection(
-            title       = "PPG / Smartwatch",
-            scanResults = ppgResults,
-            isConnected = ppgConnected,
-            onScan      = { viewModel.startPpgScan() },
-            onConnect   = { viewModel.connectPpg(it) }
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        // 🔌 Seção de conexão com a câmera térmica via BLE
-        BleConnectionSection(
-            title       = "Câmera Térmica",
-            scanResults = camResults,
-            isConnected = useBle,
-            onScan      = { viewModel.startCamScan() },
-            onConnect   = { viewModel.connectCam(it) },
-            onAdvancedOptions = { ssid, password, device -> 
-                try {
-                    // Log para depuração - verificar se esta parte está sendo executada
-                    android.util.Log.d("SetupScreen", "CALLBACK ACIONADO - Configurando opções avançadas: SSID=$ssid")
-                    
-                    // Verificar se o BleManager está disponível
-                    val bleManager = viewModel.getBleManager()
-                    if (bleManager == null) {
-                        android.util.Log.e("SetupScreen", "BleManager não disponível!")
-                        return@BleConnectionSection
-                    }
-                    
-                    android.util.Log.d("SetupScreen", "BleManager obtido com sucesso, enviando para configuração")
-                    
-                    // Verificar se o AP está ativo e enviar configurações para o ESP32
-                    wsViewModel.configureEsp32AndStartServer(
-                        bleManager = bleManager,
-                        ssid = ssid,
-                        password = password
-                    )
-                    
-                    android.util.Log.d("SetupScreen", "Chamada de configuração iniciada com sucesso")
-                } catch (e: Exception) {
-                    android.util.Log.e("SetupScreen", "ERRO ao configurar opções avançadas: ${e.message}", e)
-                    // Mostrar um toast ou alerta para o usuário seria útil aqui
-                }
-            }
-        )
-
-        // Adicionando a barra de progresso de configuração
-        if (setupProgress > 0f && setupProgress < 1f) {
-            Spacer(Modifier.height(16.dp))
-            
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Configurando WiFi e Servidor",
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    
-                    LinearProgressIndicator(
-                        progress = setupProgress,
-                        modifier = Modifier.fillMaxWidth().height(8.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Texto explicativo baseado no progresso atual
-                    val statusText = when {
-                        setupProgress < 0.4f -> "Enviando configurações WiFi..."
-                        setupProgress < 0.6f -> "Configurando rede WiFi..."
-                        setupProgress < 0.8f -> "Iniciando servidor WebSocket..."
-                        else -> "Aguardando conexão da câmera..."
-                    }
-                    
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        } else if (setupProgress >= 1f) {
-            Spacer(Modifier.height(16.dp))
-            
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.CheckCircle,
-                        contentDescription = "Configuração concluída",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    Text(
-                        text = "Configuração WiFi concluída com sucesso!",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        } 
-        // Mostrar mensagem de erro quando a configuração falhar
-        else if (wifiConfigStatus is WebSocketViewModel.WifiConfigStatus.Failed) {
-            Spacer(Modifier.height(16.dp))
-            
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(4.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Error,
-                        contentDescription = "Erro na configuração",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    Column {
-                        Text(
-                            text = "Erro na configuração WiFi",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        
-                        Spacer(modifier = Modifier.height(4.dp))
-                        
-                        // Mostrar a mensagem específica do erro
-                        Text(
-                            text = (wifiConfigStatus as WebSocketViewModel.WifiConfigStatus.Failed).reason,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                // Botão para tentar novamente
-                Button(
-                    onClick = {
-                        // Tentar configurar novamente com os mesmos parâmetros
-                        val bleManager = viewModel.getBleManager()
-                        if (bleManager != null) {
-                            // Exibe diálogo para inserir SSID e senha novamente
-                            wsViewModel.prepareRetry()
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text("Tentar Novamente")
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        // ⚙️ Seção de configuração da câmera térmica (Wi-Fi), visível se PPG estiver ativo
-        if (ppgConnected || useWs) {
-            // Título da seção
-            Text(
-                text = "Câmera Térmica",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            if (useWs) {
-                // Quando a câmera estiver conectada via Wi-Fi, mostra apenas a mensagem de sucesso
-                Text(
-                    text = "✓ Câmera térmica conectada por Wi-Fi!",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(8.dp)
-                )
-                
-                // Exibir imagem da câmera térmica
-                ThermalCameraPreview(wsViewModel)
-            } else {
-                // Mensagem explicativa quando não conectado via Wi-Fi
-                Text(
-                    text = "Configure a câmera térmica via Bluetooth para ativar a visualização.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
-        } else {
-            // 🚫 Caso o PPG ainda não esteja conectado
-            Text(
-                "Conecte o PPG/Smartwatch para habilitar configurações",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-
-        Spacer(Modifier.height(32.dp))
-
-        // ▶️ Botão para iniciar a atividade física (habilitado só se o PPG estiver conectado)
-        Button(
-            onClick = { navController.navigate("define_workout") },
-            enabled = ppgConnected,
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
         ) {
-            Text("Iniciar Atividade Física")
+            // 🔌 Seção de conexão com o dispositivo PPG / Smartwatch via BLE
+            BleConnectionSection(
+                title = "PPG / Smartwatch",
+                scanResults = ppgResults,
+                isConnected = ppgConnected,
+                onScan = { viewModel.startPpgScan() },
+                onConnect = { viewModel.connectPpg(it) },
+                allowedDeviceNames = listOf("sw"), // Apenas dispositivos com "sw" no nome
+                buttonColor = purpleButtonColor,
+                buttonIcon = { HeartEcgIcon() }
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            // 🔌 Seção de conexão com a câmera térmica via BLE
+            BleConnectionSection(
+                title = "Câmera Térmica",
+                scanResults = camResults,
+                isConnected = useBle,
+                onScan = { viewModel.startCamScan() },
+                onConnect = { viewModel.connectCam(it) },
+                allowedDeviceNames = listOf("THERMAL_CAM"), // Apenas dispositivos com "THERMAL_CAM" no nome
+                buttonColor = purpleButtonColor,
+                buttonIcon = { CameraThermometerIcon() },
+                onAdvancedOptions = { ssid, password, device -> 
+                    try {
+                        // Log para depuração - verificar se esta parte está sendo executada
+                        android.util.Log.d("SetupScreen", "CALLBACK ACIONADO - Configurando opções avançadas: SSID=$ssid")
+                        
+                        // Verificar se o BleManager está disponível
+                        val bleManager = viewModel.getBleManager()
+                        if (bleManager == null) {
+                            android.util.Log.e("SetupScreen", "BleManager não disponível!")
+                            return@BleConnectionSection
+                        }
+                        
+                        android.util.Log.d("SetupScreen", "BleManager obtido com sucesso, enviando para configuração")
+                        
+                        // Verificar se o AP está ativo e enviar configurações para o ESP32
+                        wsViewModel.configureEsp32AndStartServer(
+                            bleManager = bleManager,
+                            ssid = ssid,
+                            password = password
+                        )
+                        
+                        android.util.Log.d("SetupScreen", "Chamada de configuração iniciada com sucesso")
+                    } catch (e: Exception) {
+                        android.util.Log.e("SetupScreen", "ERRO ao configurar opções avançadas: ${e.message}", e)
+                        // Mostrar um toast ou alerta para o usuário seria útil aqui
+                    }
+                }
+            )
+
+            // Adicionando a barra de progresso de configuração
+            if (setupProgress > 0f && setupProgress < 1f) {
+                Spacer(Modifier.height(16.dp))
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Configurando WiFi e Servidor",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        
+                        LinearProgressIndicator(
+                            progress = setupProgress,
+                            modifier = Modifier.fillMaxWidth().height(8.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Texto explicativo baseado no progresso atual
+                        val statusText = when {
+                            setupProgress < 0.4f -> "Enviando configurações WiFi..."
+                            setupProgress < 0.6f -> "Configurando rede WiFi..."
+                            setupProgress < 0.8f -> "Iniciando servidor WebSocket..."
+                            else -> "Aguardando conexão da câmera..."
+                        }
+                        
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            } else if (setupProgress >= 1f) {
+                Spacer(Modifier.height(16.dp))
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = "Configuração concluída",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        Text(
+                            text = "Configuração WiFi concluída com sucesso!",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            } 
+            // Mostrar mensagem de erro quando a configuração falhar
+            else if (wifiConfigStatus is WebSocketViewModel.WifiConfigStatus.Failed) {
+                Spacer(Modifier.height(16.dp))
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Error,
+                            contentDescription = "Erro na configuração",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        Column {
+                            Text(
+                                text = "Erro na configuração WiFi",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            // Mostrar a mensagem específica do erro
+                            Text(
+                                text = (wifiConfigStatus as WebSocketViewModel.WifiConfigStatus.Failed).reason,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Botão para tentar novamente
+                    Button(
+                        onClick = {
+                            // Tentar configurar novamente com os mesmos parâmetros
+                            val bleManager = viewModel.getBleManager()
+                            if (bleManager != null) {
+                                // Exibe diálogo para inserir SSID e senha novamente
+                                wsViewModel.prepareRetry()
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Tentar Novamente")
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // ⚙️ Seção de configuração da câmera térmica (Wi-Fi), visível se PPG estiver ativo
+            if (ppgConnected || useWs) {
+                // Título da seção
+                Text(
+                    text = "Câmera Térmica",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                if (useWs) {
+                    // Quando a câmera estiver conectada via Wi-Fi, mostra apenas a mensagem de sucesso
+                    Text(
+                        text = "✓ Câmera térmica conectada por Wi-Fi!",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                    
+                    // Exibir imagem da câmera térmica
+                    ThermalCameraPreview(wsViewModel)
+                } else {
+                    // Mensagem explicativa quando não conectado via Wi-Fi
+                    Text(
+                        text = "Configure a câmera térmica via Wi-Fi para ativar a visualização.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            } else {
+                // 🚫 Caso o PPG ainda não esteja conectado
+                Text(
+                    "Conecte a câmera térmica para habilitar visualização",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
+
+        // Botão fixo na parte inferior
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(horizontal = 12.dp, vertical = 2.dp) // Padding vertical mínimo para ficar bem próximo da barra de navegação
+        ) {
+            Button(
+                onClick = { navController.navigate("define_workout") },
+                enabled = ppgConnected,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = purpleButtonColor,
+                    disabledContainerColor = purpleButtonColor.copy(alpha = 0.5f),
+                    disabledContentColor = Color.White.copy(alpha = 0.7f)
+                )
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    BicycleIcon()
+                    Spacer(Modifier.width(8.dp))
+                    Text("Iniciar Atividade Física")
+                }
+            }
         }
     }
 }
