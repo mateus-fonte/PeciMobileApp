@@ -25,6 +25,13 @@ import kotlin.concurrent.thread
  */
 class WebSocketServerService(private val context: Context) {
     
+    // Possíveis estados do servidor
+    sealed class ServerState {
+        object Running : ServerState()
+        object Stopped : ServerState()
+        object HotspotNotActive : ServerState()
+    }
+    
     // Porta padrão para o servidor WebSocket
     private val DEFAULT_PORT = 8080
     private var port = DEFAULT_PORT
@@ -125,10 +132,18 @@ class WebSocketServerService(private val context: Context) {
     }
     
     /**
-     * Obtém o endereço IP do hotspot (ap0)
+     * Obtém o endereço IP do dispositivo sem iniciar o servidor
+     * Este método pode ser usado por outros componentes que precisam apenas do IP
      */
-    private fun getIpAddress(): String {
-        // Procurar especificamente a interface ap0
+    fun getDeviceIpAddress(): String {
+        return getIpAddress()
+    }
+    
+    /**
+     * Verifica se o Access Point (ap0) está ativo
+     * @return true se o AP estiver ativo, false caso contrário
+     */
+    fun isAccessPointActive(): Boolean {
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
@@ -139,7 +154,35 @@ class WebSocketServerService(private val context: Context) {
                         val address = addresses.nextElement()
                         if (!address.isLoopbackAddress && address is InetAddress && 
                                 address.hostAddress.indexOf(':') < 0) { // Filtra IPv6
-                            Log.d(TAG, "Endereço IP da interface ap0: ${address.hostAddress}")
+                            Log.d(TAG, "Access Point ap0 está ativo com IP: ${address.hostAddress}")
+                            return true
+                        }
+                    }
+                }
+            }
+            Log.d(TAG, "Access Point ap0 não está ativo")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao verificar status do Access Point", e)
+        }
+        return false
+    }
+    
+    /**
+     * Obtém o IP específico da interface ap0 (Access Point)
+     * @return IP da interface ap0 ou null se não estiver disponível
+     */
+    fun getAp0IpAddress(): String? {
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isUp && networkInterface.name == "ap0") {
+                    val addresses = networkInterface.inetAddresses
+                    while (addresses.hasMoreElements()) {
+                        val address = addresses.nextElement()
+                        if (!address.isLoopbackAddress && address is InetAddress && 
+                                address.hostAddress.indexOf(':') < 0) { // Filtra IPv6
+                            Log.d(TAG, "IP da interface ap0: ${address.hostAddress}")
                             return address.hostAddress
                         }
                     }
@@ -149,8 +192,17 @@ class WebSocketServerService(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao obter endereço IP da interface ap0", e)
         }
+        return null
+    }
+    
+    /**
+     * Obtém o endereço IP do dispositivo
+     */
+    private fun getIpAddress(): String {
+        // Tentar primeiro obter o IP da interface ap0 (prioridade para o IP do hotspot)
+        getAp0IpAddress()?.let { return it }
         
-        // Fallback: WifiManager (mantido como backup)
+        // Fallback: WifiManager para outros casos
         try {
             val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
             val ipAddress = wifiManager.connectionInfo.ipAddress
@@ -166,28 +218,7 @@ class WebSocketServerService(private val context: Context) {
                 )
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao obter endereço IP via WifiManager", e)
-        }
-        
-        // Segundo fallback: outras interfaces de rede
-        try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-                if (networkInterface.isUp && !networkInterface.isLoopback && 
-                        (networkInterface.name.startsWith("wlan") || networkInterface.name.startsWith("eth"))) {
-                    val addresses = networkInterface.inetAddresses
-                    while (addresses.hasMoreElements()) {
-                        val address = addresses.nextElement()
-                        if (!address.isLoopbackAddress && address is InetAddress && 
-                                address.hostAddress.indexOf(':') < 0) { // Filtra IPv6
-                            return address.hostAddress
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao obter endereço IP alternativo", e)
+            Log.e(TAG, "Erro ao obter endereço IP", e)
         }
         
         return "127.0.0.1" // IP localhost como último recurso

@@ -1,11 +1,17 @@
 package com.example.pecimobileapp.ui.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
@@ -47,7 +53,34 @@ fun SetupScreen(
             scanResults = camResults,
             isConnected = useBle,
             onScan      = { viewModel.startCamScan() },
-            onConnect   = { viewModel.connectCam(it) }
+            onConnect   = { viewModel.connectCam(it) },
+            onAdvancedOptions = { ssid, password, device -> 
+                try {
+                    // Log para depuração - verificar se esta parte está sendo executada
+                    android.util.Log.d("SetupScreen", "CALLBACK ACIONADO - Configurando opções avançadas: SSID=$ssid")
+                    
+                    // Verificar se o BleManager está disponível
+                    val bleManager = viewModel.getBleManager()
+                    if (bleManager == null) {
+                        android.util.Log.e("SetupScreen", "BleManager não disponível!")
+                        return@BleConnectionSection
+                    }
+                    
+                    android.util.Log.d("SetupScreen", "BleManager obtido com sucesso, enviando para configuração")
+                    
+                    // Verificar se o AP está ativo e enviar configurações para o ESP32
+                    wsViewModel.configureEsp32AndStartServer(
+                        bleManager = bleManager,
+                        ssid = ssid,
+                        password = password
+                    )
+                    
+                    android.util.Log.d("SetupScreen", "Chamada de configuração iniciada com sucesso")
+                } catch (e: Exception) {
+                    android.util.Log.e("SetupScreen", "ERRO ao configurar opções avançadas: ${e.message}", e)
+                    // Mostrar um toast ou alerta para o usuário seria útil aqui
+                }
+            }
         )
 
         Spacer(Modifier.height(24.dp))
@@ -68,6 +101,9 @@ fun SetupScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(8.dp)
                 )
+                
+                // Exibir imagem da câmera térmica
+                ThermalCameraPreview(wsViewModel)
             }
         } else {
             // 🚫 Caso o PPG ainda não esteja conectado
@@ -87,6 +123,85 @@ fun SetupScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Iniciar Atividade Física")
+        }
+    }
+}
+
+/**
+ * Componente que exibe a visualização da câmera térmica
+ */
+@Composable
+fun ThermalCameraPreview(wsViewModel: WebSocketViewModel) {
+    // Obter a imagem processada do WebSocketViewModel
+    val processedImageData by wsViewModel.processedImage.collectAsState()
+    val bitmap = processedImageData.first
+    val faceData = processedImageData.second
+    
+    // Card para exibir a imagem
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Visualização da Câmera Térmica",
+                style = MaterialTheme.typography.titleSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            // Se tiver imagem, exibir. Caso contrário, mostrar um placeholder
+            if (bitmap != null) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Imagem da câmera térmica",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                        .padding(vertical = 8.dp)
+                )
+                
+                // Mostrar informações sobre rostos detectados
+                if (faceData.isNotEmpty()) {
+                    val maxTemp = faceData.maxByOrNull { it.temperature }?.temperature ?: 0f
+                    
+                    // Mostrar a contagem de faces e a temperatura máxima detectada
+                    Text(
+                        text = "${faceData.size} ${if (faceData.size == 1) "pessoa detectada" else "pessoas detectadas"} " +
+                              "(Temp. máx: ${String.format("%.1f°C", maxTemp)})",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            } else {
+                // Placeholder quando não há imagem
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(240.dp)
+                        .background(Color.LightGray),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Aguardando imagem da câmera...",
+                        color = Color.DarkGray
+                    )
+                }
+            }
+        }
+    }
+    
+    // Log para depuração
+    LaunchedEffect(bitmap) {
+        if (bitmap != null) {
+            android.util.Log.d("ThermalCameraPreview", "Imagem recebida e exibida na tela de Setup")
         }
     }
 }
