@@ -2,6 +2,7 @@ package com.example.pecimobileapp.viewmodels
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.services.WebSocketServerService
@@ -9,6 +10,8 @@ import kotlinx.coroutines.flow.*
 import com.example.pecimobileapp.utils.OpenCVUtils
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import com.example.pecimobileapp.ble.BleManager
 
 /**
@@ -38,6 +41,10 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     // Estado das configurações WiFi do ESP32
     private val _wifiConfigStatus = MutableStateFlow<WifiConfigStatus>(WifiConfigStatus.NotConfigured)
     val wifiConfigStatus: StateFlow<WifiConfigStatus> = _wifiConfigStatus
+
+    // Estado para progresso da configuração (combinando com o progresso do BleManager)
+    private val _setupProgress = MutableStateFlow(0f)
+    val setupProgress: StateFlow<Float> = _setupProgress
 
     // Observáveis para a UI
     val isServerRunning: StateFlow<Boolean> = webSocketServer.isRunning
@@ -252,7 +259,17 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             android.util.Log.d("WebSocketViewModel", "====== INICIANDO CONFIGURAÇÃO ESP32 ======")
             android.util.Log.d("WebSocketViewModel", "SSID: $ssid, Senha: ${password.take(2)}***")
             
+            // Reseta o progresso da configuração
+            _setupProgress.value = 0f
             _wifiConfigStatus.value = WifiConfigStatus.Configuring
+            
+            // Observa o progresso do BleManager para escritas Bluetooth
+            val bleProgressJob = viewModelScope.launch {
+                bleManager.configProgress.collect { progress ->
+                    // Atualizamos o nosso progresso com base no progresso do BleManager
+                    _setupProgress.value = progress * 0.6f  // 60% do progresso total vem da configuração BLE
+                }
+            }
             
             // 1. Verifica se o Access Point está ativo
             android.util.Log.d("WebSocketViewModel", "Verificando status do Access Point...")
@@ -262,6 +279,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             if (!isApActive) {
                 android.util.Log.d("WebSocketViewModel", "⚠️ ERRO: Access Point não está ativo. Configure o AP antes de continuar.")
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Access Point não está ativo")
+                bleProgressJob.cancel()
                 return@launch
             }
             
@@ -273,6 +291,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             if (apIp == null) {
                 android.util.Log.d("WebSocketViewModel", "⚠️ ERRO: Não foi possível obter o IP do Access Point")
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Não foi possível obter o IP do Access Point")
+                bleProgressJob.cancel()
                 return@launch
             }
             
@@ -285,6 +304,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             } catch (e: Exception) {
                 android.util.Log.e("WebSocketViewModel", "⚠️ ERRO ao enviar configurações: ${e.message}", e)
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro ao enviar configurações: ${e.message}")
+                bleProgressJob.cancel()
                 return@launch
             }
             
@@ -303,8 +323,27 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             if (!configSent) {
                 android.util.Log.d("WebSocketViewModel", "⚠️ ERRO: Timeout ao enviar configurações para ESP32")
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Timeout ao enviar configurações")
+                
+                // Mostrar Toast informando sobre o timeout
+                Toast.makeText(
+                    getApplication(),
+                    "Timeout: Não foi possível enviar as configurações para a câmera térmica. Tente novamente.",
+                    Toast.LENGTH_LONG
+                ).show()
+                
+                bleProgressJob.cancel()
+                
+                // Resetar o progresso para a próxima tentativa após um curto delay
+                viewModelScope.launch {
+                    delay(5000) // Esperar 5 segundos para que o usuário veja a mensagem de erro
+                    _setupProgress.value = 0f
+                }
+                
                 return@launch
             }
+            
+            // Configuração BLE enviada com sucesso, avançamos para 60%
+            _setupProgress.value = 0.6f
             
             android.util.Log.d("WebSocketViewModel", "✅ Configurações enviadas com sucesso para ESP32")
             _wifiConfigStatus.value = WifiConfigStatus.Configured
@@ -319,6 +358,46 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 
                 if (serverResult.first) {
                     android.util.Log.d("WebSocketViewModel", "✅ Servidor WebSocket iniciado com sucesso!")
+                    // Servidor iniciado, avançamos para 80%
+                    _setupProgress.value = 0.8f
+                    
+                    // Observar o recebimento da primeira imagem
+                    val imageMonitorJob = viewModelScope.launch {
+                        // Espera pela primeira imagem
+                        latestCameraImage.collect { (bitmap, _) ->
+                            if (bitmap != null && _setupProgress.value < 1f) {
+                                // Imagem recebida, progresso completo
+                                _setupProgress.value = 1f
+                                android.util.Log.d("WebSocketViewModel", "✅ Primeira imagem recebida, configuração completa!")
+                                // Cancelar este job explicitamente em vez de cancelar do contexto do coletor
+                                return@collect
+                            }
+                        }
+                    }
+                    
+                    // Registrar um manipulador para cancelar o job após um timeout se necessário
+                    viewModelScope.launch {
+                        delay(60000) // Timeout de 60 segundos
+                        if (imageMonitorJob.isActive) {
+                            imageMonitorJob.cancel()
+                            android.util.Log.d("WebSocketViewModel", "⚠️ Timeout ao esperar pela primeira imagem")
+                            
+                            // Mostrar Toast informando sobre o timeout
+                            Toast.makeText(
+                                getApplication(),
+                                "Timeout: Não foi possível receber imagens da câmera térmica. Verifique se o dispositivo está conectado corretamente.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            
+                            // Atualizar o status de configuração para falha
+                            _wifiConfigStatus.value = WifiConfigStatus.Failed("Timeout ao aguardar imagens da câmera")
+                            
+                            // Resetar o progresso para a próxima tentativa após um curto delay
+                            // Isso permitirá que a UI mostre o estado de erro antes de resetar
+                            delay(5000) // Esperar 5 segundos para que o usuário veja a mensagem de erro
+                            _setupProgress.value = 0f
+                        }
+                    }
                 } else {
                     android.util.Log.d("WebSocketViewModel", "⚠️ Falha ao iniciar servidor: ${serverResult.second}")
                 }
@@ -326,9 +405,21 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 android.util.Log.e("WebSocketViewModel", "⚠️ ERRO ao iniciar servidor: ${e.message}", e)
             }
             
+            // Cancelamos o job de monitoramento do BleManager
+            bleProgressJob.cancel()
+            
         } catch (e: Exception) {
             android.util.Log.e("WebSocketViewModel", "⚠️ ERRO GERAL: ${e.message}", e)
             _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro: ${e.message}")
         }
+    }
+    
+    /**
+     * Prepara o ViewModel para uma nova tentativa de configuração após uma falha
+     * Reseta o estado de configuração WiFi para NotConfigured
+     */
+    fun prepareRetry() {
+        _wifiConfigStatus.value = WifiConfigStatus.NotConfigured
+        _setupProgress.value = 0f
     }
 }
