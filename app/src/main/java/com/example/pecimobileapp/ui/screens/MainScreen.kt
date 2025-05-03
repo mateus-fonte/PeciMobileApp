@@ -145,8 +145,8 @@ fun MainScreen(
                     }
                 }
                 useWs -> {
-                    // Exemplo: lemos do WebSocketViewModel diretamente
-                    val avg = wsViewModel.getThermalAvgValue()
+                    // Obtendo a temperatura do maior rosto detectado (principal)
+                    val faceTemp = wsViewModel.getLargestFaceTemperature()
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -156,10 +156,10 @@ fun MainScreen(
                             modifier = Modifier.padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Temperatura Média via WS", style = MaterialTheme.typography.titleMedium)
+                            Text("Temperatura do Rosto Principal", style = MaterialTheme.typography.titleMedium)
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                text = "%.1f °C".format(avg),
+                                text = "%.1f °C".format(faceTemp),
                                 style = MaterialTheme.typography.headlineLarge
                             )
                         }
