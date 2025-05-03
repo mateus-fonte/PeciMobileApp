@@ -31,13 +31,7 @@ fun BleConnectionSection(
     // Estado para armazenar o dispositivo selecionado para uso posterior
     var selectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     
-    // Efeito para mostrar o diálogo de opções avançadas quando a câmera térmica for conectada
-    LaunchedEffect(isConnected) {
-        if (isConnected && title.contains("térmica", ignoreCase = true)) {
-            Log.d("BleConnectionSection", "Câmera térmica conectada! Mostrando diálogo de opções avançadas.")
-            showAdvancedOptionsDialog = true
-        }
-    }
+    // Removemos o LaunchedEffect que mostrava o diálogo automaticamente
 
     Column(Modifier.fillMaxWidth().padding(8.dp)) {
         if (!isConnected) {
@@ -59,11 +53,31 @@ fun BleConnectionSection(
                 }
             }
         } else {
-            Text(
-                text = "$title conectado!",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(8.dp)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "$title conectado!",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(8.dp)
+                )
+                
+                // Só exibe o botão de opções avançadas para a câmera térmica
+                if (title.contains("térmica", ignoreCase = true) && onAdvancedOptions != null) {
+                    Button(
+                        onClick = { 
+                            Log.d("BleConnectionSection", "Botão de opções avançadas clicado")
+                            showAdvancedOptionsDialog = true 
+                        },
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text("Opções Avançadas")
+                    }
+                }
+            }
         }
     }
     
