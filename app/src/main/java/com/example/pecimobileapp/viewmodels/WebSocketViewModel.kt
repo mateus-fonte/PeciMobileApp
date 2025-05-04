@@ -47,6 +47,14 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     // Estado para progresso da configuração (combinando com o progresso do BleManager)
     private val _setupProgress = MutableStateFlow(0f)
     val setupProgress: StateFlow<Float> = _setupProgress
+    
+    // Estado para indicar se uma imagem foi recebida
+    private val _imageReceived = MutableStateFlow(false)
+    val imageReceived: StateFlow<Boolean> = _imageReceived
+    
+    // Estado para armazenar qualquer erro de conexão
+    private val _connectionError = MutableStateFlow<String?>(null)
+    val connectionError: StateFlow<String?> = _connectionError
 
     // Observáveis para a UI
     val isServerRunning: StateFlow<Boolean> = webSocketServer.isRunning
@@ -57,6 +65,54 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     // Imagem processada com OpenCV (com detecção facial e sobreposição térmica)
     val processedImage: StateFlow<Pair<Bitmap?, List<OpenCVUtils.FaceData>>> = webSocketServer.processedImage
     
+    // Inicializa o monitoramento de imagens recebidas
+    init {
+        // Observa as imagens da câmera para atualizar o status de imageReceived
+        viewModelScope.launch {
+            latestCameraImage.collect { (bitmap, _) ->
+                if (bitmap != null && !_imageReceived.value) {
+                    _imageReceived.value = true
+                    _connectionError.value = null // Limpa qualquer erro quando uma imagem é recebida
+                }
+            }
+        }
+        
+        // Observa o estado do servidor para detectar e reportar erros
+        viewModelScope.launch {
+            serverState.collect { state ->
+                when (state) {
+                    is WebSocketServerService.ServerState.HotspotNotActive -> {
+                        _connectionError.value = "O hotspot do dispositivo não está ativo. Por favor, ative-o e tente novamente."
+                    }
+                    is WebSocketServerService.ServerState.Error -> {
+                        _connectionError.value = "Erro na conexão WebSocket: ${state.message}"
+                    }
+                    is WebSocketServerService.ServerState.Stopped -> {
+                        // Quando o servidor é parado intencionalmente, não mostramos erro
+                        if (_connectionError.value?.contains("hotspot") != true) {
+                            _connectionError.value = null
+                        }
+                        _imageReceived.value = false
+                    }
+                    else -> {
+                        // Para outros estados, não fazemos nada
+                    }
+                }
+            }
+        }
+        
+        // Observa a contagem de clientes para detectar desconexões
+        viewModelScope.launch {
+            var lastClientCount = 0
+            connectionStats.collect { stats ->
+                if (lastClientCount > 0 && stats.clientsCount == 0) {
+                    _connectionError.value = "A câmera térmica foi desconectada do servidor WebSocket."
+                }
+                lastClientCount = stats.clientsCount
+            }
+        }
+    }
+    
     /**
      * Inicia o servidor WebSocket
      */
@@ -64,9 +120,11 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         val result = webSocketServer.startServer(port)
         if (result) {
             _serverState.value = WebSocketServerService.ServerState.Running
+            _connectionError.value = null
         } else {
             // Assume hotspot não ativo como causa padrão de falha
             _serverState.value = WebSocketServerService.ServerState.HotspotNotActive
+            _connectionError.value = "Falha ao iniciar servidor WebSocket. Verifique o hotspot do dispositivo."
         }
         return Pair(result, _serverState.value)
     }
@@ -77,30 +135,14 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     fun stopServer() = viewModelScope.launch {
         webSocketServer.stopServer()
         _serverState.value = WebSocketServerService.ServerState.Stopped
+        _imageReceived.value = false
     }
 
     /**
-     * Retorna o valor mínimo do array térmico
+     * Limpa erros de conexão
      */
-    fun getThermalMinValue(): Float {
-        val thermalData = latestThermalData.value.first ?: return 0f
-        return thermalData.minOrNull() ?: 0f
-    }
-
-    /**
-     * Retorna o valor máximo do array térmico
-     */
-    fun getThermalMaxValue(): Float {
-        val thermalData = latestThermalData.value.first ?: return 0f
-        return thermalData.maxOrNull() ?: 0f
-    }
-
-    /**
-     * Retorna o valor médio do array térmico
-     */
-    fun getThermalAvgValue(): Float {
-        val thermalData = latestThermalData.value.first ?: return 0f
-        return thermalData.average().toFloat()
+    fun clearConnectionError() {
+        _connectionError.value = null
     }
 
     // — NOVO — derivamos esses StateFlows para usar diretamente em Compose:
@@ -165,6 +207,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         // Verifica primeiro se o AP está ativo
         if (!checkAccessPointStatus()) {
             _serverState.value = WebSocketServerService.ServerState.HotspotNotActive
+            _connectionError.value = "O hotspot do dispositivo não está ativo. Por favor, ative-o para usar a câmera térmica."
             return Pair(false, _serverState.value)
         }
         
@@ -196,6 +239,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         
         if (!serverStarted) {
             _serverState.value = WebSocketServerService.ServerState.HotspotNotActive
+            _connectionError.value = "Não foi possível iniciar o servidor WebSocket após várias tentativas."
         }
     }
     
@@ -215,6 +259,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             // Verificar se o AP está ativo
             if (!checkAccessPointStatus()) {
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Access Point não está ativo")
+                _connectionError.value = "Access Point não está ativo. Ative o hotspot e tente novamente."
                 return@launch
             }
             
@@ -222,6 +267,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             val ip = getAccessPointIp()
             if (ip == null) {
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Não foi possível obter o IP do Access Point")
+                _connectionError.value = "Não foi possível obter o IP do Access Point."
                 return@launch
             }
             
@@ -233,6 +279,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             // Como este código é intermediário, vamos apenas simular o sucesso
             
             _wifiConfigStatus.value = WifiConfigStatus.Configured
+            _connectionError.value = null
             
             // Iniciar o servidor WebSocket automaticamente após configurar o WiFi
             startServerWithApCheck()
@@ -240,6 +287,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         } catch (e: Exception) {
             android.util.Log.e("WebSocketViewModel", "Erro ao configurar WiFi", e)
             _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro: ${e.message}")
+            _connectionError.value = "Erro ao configurar WiFi: ${e.message}"
         }
     }
     
@@ -261,9 +309,11 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             android.util.Log.d("WebSocketViewModel", "====== INICIANDO CONFIGURAÇÃO ESP32 ======")
             android.util.Log.d("WebSocketViewModel", "SSID: $ssid, Senha: ${password.take(2)}***")
             
-            // Reseta o progresso da configuração
+            // Reseta o progresso da configuração e limpa erros anteriores
             _setupProgress.value = 0f
             _wifiConfigStatus.value = WifiConfigStatus.Configuring
+            _connectionError.value = null
+            _imageReceived.value = false
             
             // Observa o progresso do BleManager para escritas Bluetooth
             val bleProgressJob = viewModelScope.launch {
@@ -281,6 +331,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             if (!isApActive) {
                 android.util.Log.d("WebSocketViewModel", "⚠️ ERRO: Access Point não está ativo. Configure o AP antes de continuar.")
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Access Point não está ativo")
+                _connectionError.value = "O hotspot do dispositivo não está ativo. Ative-o antes de continuar."
                 bleProgressJob.cancel()
                 return@launch
             }
@@ -293,6 +344,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             if (apIp == null) {
                 android.util.Log.d("WebSocketViewModel", "⚠️ ERRO: Não foi possível obter o IP do Access Point")
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Não foi possível obter o IP do Access Point")
+                _connectionError.value = "Não foi possível obter o IP do hotspot. Verifique as configurações e tente novamente."
                 bleProgressJob.cancel()
                 return@launch
             }
@@ -306,6 +358,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             } catch (e: Exception) {
                 android.util.Log.e("WebSocketViewModel", "⚠️ ERRO ao enviar configurações: ${e.message}", e)
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro ao enviar configurações: ${e.message}")
+                _connectionError.value = "Erro ao enviar configurações para a câmera: ${e.message}"
                 bleProgressJob.cancel()
                 return@launch
             }
@@ -347,6 +400,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                             if (bitmap != null && _setupProgress.value < 1f) {
                                 // Imagem recebida, progresso completo
                                 _setupProgress.value = 1f
+                                _imageReceived.value = true
                                 android.util.Log.d("WebSocketViewModel", "✅ Primeira imagem recebida, configuração completa!")
                                 return@collect
                             }
@@ -354,9 +408,11 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 } else {
                     android.util.Log.d("WebSocketViewModel", "⚠️ Falha ao iniciar servidor: ${serverResult.second}")
+                    _connectionError.value = "Falha ao iniciar servidor WebSocket. Verifique o hotspot do dispositivo."
                 }
             } catch (e: Exception) {
                 android.util.Log.e("WebSocketViewModel", "⚠️ ERRO ao iniciar servidor: ${e.message}", e)
+                _connectionError.value = "Erro ao iniciar servidor WebSocket: ${e.message}"
             }
             
             // Cancelamos o job de monitoramento do BleManager
@@ -365,6 +421,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         } catch (e: Exception) {
             android.util.Log.e("WebSocketViewModel", "⚠️ ERRO GERAL: ${e.message}", e)
             _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro: ${e.message}")
+            _connectionError.value = "Erro na configuração: ${e.message}"
         }
     }
     
@@ -375,6 +432,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     fun prepareRetry() {
         _wifiConfigStatus.value = WifiConfigStatus.NotConfigured
         _setupProgress.value = 0f
+        _connectionError.value = null
     }
     
     /**

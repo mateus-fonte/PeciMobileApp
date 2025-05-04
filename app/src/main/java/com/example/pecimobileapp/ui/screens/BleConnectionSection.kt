@@ -3,12 +3,19 @@ package com.example.pecimobileapp.ui.screens
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.le.ScanResult
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import android.util.Log
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
@@ -122,6 +129,41 @@ fun ThermalCameraBleSection(
     // Estado para alerta do Access Point
     var showApAlert by remember { mutableStateOf(false) }
     var apAlertMessage by remember { mutableStateOf("") }
+    
+    // Estado para verificar se está em processo de configuração
+    var isConfiguring by remember { mutableStateOf(false) }
+    
+    // Estado para controlar a animação de piscar no aviso do AP
+    var shouldFlashWarning by remember { mutableStateOf(false) }
+    
+    // Definição da animação para o cartão de aviso
+    val warningCardColor by animateColorAsState(
+        targetValue = if (shouldFlashWarning) 
+            MaterialTheme.colorScheme.errorContainer 
+        else 
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+        animationSpec = repeatable(
+            iterations = 3,
+            animation = tween(durationMillis = 300),
+            repeatMode = RepeatMode.Reverse
+        ),
+        finishedListener = {
+            // Resetar a animação após ela terminar
+            shouldFlashWarning = false
+        },
+        label = "WarningColorAnimation"
+    )
+    
+    // Animação para escala do cartão
+    val warningCardScale by animateFloatAsState(
+        targetValue = if (shouldFlashWarning) 1.05f else 1f,
+        animationSpec = repeatable(
+            iterations = 3,
+            animation = tween(durationMillis = 300),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "WarningScaleAnimation"
+    )
 
     // Filtrar apenas dispositivos THERMAL_CAM
     val filteredResults = scanResults.filter { result ->
@@ -212,22 +254,60 @@ fun ThermalCameraBleSection(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    Text(
-                        text = "Configurações WiFi",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    
-                    Text(
-                        "Para usar a câmera térmica via WiFi, certifique-se que o Access Point (Hotspot) do seu dispositivo está ativado.",
-                        style = MaterialTheme.typography.bodyMedium,
+                    // Título da seção com ícone
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(bottom = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Wifi,
+                            contentDescription = "WiFi",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        Text(
+                            text = "Configurações WiFi",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                    
+                    // Destaque para o requisito do Access Point com animação
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = warningCardColor
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp)
+                            .graphicsLayer(scaleX = warningCardScale, scaleY = warningCardScale)
+                    ) {
+                        Text(
+                            text = "⚠️ Importante: Certifique-se que o Access Point (Hotspot) do seu dispositivo está ativado.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(12.dp),
+                            color = if (shouldFlashWarning) 
+                                MaterialTheme.colorScheme.onErrorContainer 
+                            else 
+                                MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    
+                    // Formulário para SSID e senha com descrições melhores
+                    Text(
+                        text = "Insira as informações do hotspot do seu celular:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
                     
                     OutlinedTextField(
                         value = ssid,
                         onValueChange = { ssid = it },
-                        label = { Text("SSID do Access Point") },
+                        label = { Text("Nome da rede (SSID)") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     
@@ -236,7 +316,9 @@ fun ThermalCameraBleSection(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Senha do Access Point") },
+                        label = { Text("Senha da rede") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth()
                     )
                     
@@ -250,11 +332,14 @@ fun ThermalCameraBleSection(
                                     val (canProceed, errorMessage) = wsViewModel.checkBeforeCameraConfig()
                                     
                                     if (canProceed) {
+                                        // Se o AP está ativo, prosseguir com a configuração
+                                        isConfiguring = true
                                         Log.d("ThermalCameraBleSection", "Enviando configurações WiFi: SSID=$ssid")
                                         onAdvancedOptions(ssid, password, device)
                                     } else {
-                                        // Mostrar alerta se o AP não estiver ativo
+                                        // Se o AP não está ativo, iniciar a animação de alerta
                                         Log.d("ThermalCameraBleSection", "Access Point não ativo: $errorMessage")
+                                        shouldFlashWarning = true
                                         apAlertMessage = errorMessage
                                         showApAlert = true
                                     }
@@ -265,10 +350,28 @@ fun ThermalCameraBleSection(
                                 }
                             }
                         },
+                        enabled = !isConfiguring && ssid.isNotEmpty() && password.isNotEmpty(),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Configurar Câmera")
+                        if (isConfiguring) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("Configurar Câmera via WiFi")
                     }
+                    
+                    // Texto explicativo sobre o processo
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Ao clicar em \"Configurar Câmera via WiFi\", a câmera será configurada para se conectar ao hotspot do seu celular e enviar imagens por WiFi, permitindo a visualização em tempo real.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
         }

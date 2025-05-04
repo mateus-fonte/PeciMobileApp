@@ -31,6 +31,7 @@ class WebSocketServerService(private val context: Context) {
         object Running : ServerState()
         object Stopped : ServerState()
         object HotspotNotActive : ServerState()
+        data class Error(val message: String) : ServerState()
     }
     
     // Porta padrão para o servidor WebSocket
