@@ -21,11 +21,12 @@ fun MainScreen(
     val ppgLost        by viewModel.ppgConnectionLost.collectAsState()
     val useBle         by viewModel.isCamConnected.collectAsState()
     val camLost        by viewModel.camConnectionLost.collectAsState()
-    val useWs          by wsViewModel.isServerRunning.collectAsState()
+    val useWs          by wsViewModel.isWsConnected.collectAsState() // Alterado para isWsConnected para verificar clientes conectados
     val avgTemp        by viewModel.avgTemp.collectAsState()
     val maxTemp        by viewModel.maxTemp.collectAsState()
     val minTemp        by viewModel.minTemp.collectAsState()
-    val avgTempWs      = remember { mutableStateOf(0f) }
+    // Coletar a temperatura facial como estado observável
+    val facialTemp     by wsViewModel.processedImage.collectAsState()
 
     // Para exibir snackbars:
     val snackbarHostState = remember { SnackbarHostState() }
@@ -146,7 +147,22 @@ fun MainScreen(
                 }
                 useWs -> {
                     // Obtendo a temperatura do maior rosto detectado (principal)
-                    val faceTemp = wsViewModel.getLargestFaceTemperature()
+                    // Calculamos a temperatura facial com base na imagem processada atual
+                    val faceData = facialTemp.second
+                    
+                    // Obter a temperatura do maior rosto na imagem, se houver
+                    val faceTemp = if (faceData.isNotEmpty()) {
+                        // Encontrar o rosto com a maior área (provavelmente o mais próximo)
+                        val largestFace = faceData.maxByOrNull { it.width * it.height }
+                        largestFace?.temperature
+                    } else {
+                        null
+                    }
+                    
+                    // Se não tiver rosto na imagem atual, usar o método do ViewModel que armazena 
+                    // a última temperatura válida
+                    val displayTemp = faceTemp ?: wsViewModel.getLargestFaceTemperature()
+                    
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -159,9 +175,19 @@ fun MainScreen(
                             Text("Temperatura do Rosto Principal", style = MaterialTheme.typography.titleMedium)
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                text = "%.1f °C".format(faceTemp),
+                                text = if (displayTemp > 0) "%.1f °C".format(displayTemp) else "-- °C",
                                 style = MaterialTheme.typography.headlineLarge
                             )
+                            
+                            // Adicionar texto de status se não houver rostos detectados
+                            if (faceData.isEmpty()) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "Nenhum rosto detectado na imagem atual",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }
