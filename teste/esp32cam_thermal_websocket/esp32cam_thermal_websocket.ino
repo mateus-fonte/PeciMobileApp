@@ -395,8 +395,8 @@
    delay(1000);            // Pequena pausa para estabilização
    
    // Iniciar conexão
-   //WiFi.begin(ssid, password);
-   WiFi.begin("testwifi", "87654321");
+   WiFi.begin(ssid, password);
+   //WiFi.begin("testwifi", "87654321");
    
    // Aguardar conexão com mais tentativas (30 segundos no total)
    int attempts = 0;
@@ -580,6 +580,10 @@
    }
    
    Serial.printf("[WEBSOCKET] Array térmico enviado: %u bytes\n", (unsigned int)(thermal_buffer_size));
+   
+   // Adicionando delay para dar tempo ao websocket de processar o primeiro envio
+   // e para o cliente também processar os dados recebidos
+   delay(200);  // Delay de 200ms entre envios de dados
    
    // 4. Controle de envio de imagem (só envia a cada N ciclos)
    frameCount++;
@@ -824,22 +828,24 @@
  }
  
  
- void loop() {
-   if(mode == RUNNING_BLE) {
-     running_ble();
-   }
-   else if(mode == RUNNING_WIFI) {
-     running_wifi();
-   }
-   else if(mode == SETTING) {
-     if(ssid != "" && password != "" && server_ip[0] != '\0') {
-       setup_camera();
-       setup_wifi();
-       setup_webSocket();
-       mode = RUNNING_WIFI;
-     }
-   }
-   
-   // Usar delay de 500ms para manter frequência de 2Hz
-   delay(500);
- }
+void loop() {
+  if(mode == RUNNING_BLE) {
+    running_ble();
+  }
+  else if(mode == RUNNING_WIFI) {
+    running_wifi();
+  }
+  else if(mode == SETTING) {
+    if(ssid != "" && password != "" && server_ip[0] != '\0') {
+      setup_camera();
+      if(setup_wifi()) {
+        setup_webSocket();
+        Serial.println("[WIFI] Conectado ao WebSocket!");
+        mode = RUNNING_WIFI;
+      }
+    }
+  }
+  
+  // Usar delay de 500ms para manter frequência de 2Hz
+  delay(500);
+}
