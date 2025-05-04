@@ -2,6 +2,7 @@ package com.example.pecimobileapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -10,13 +11,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.pecimobileapp.ui.ProfileViewModel
+import com.example.pecimobileapp.viewmodels.ProfileViewModelFactory
 import com.example.pecimobileapp.ui.theme.*
-import androidx.compose.foundation.rememberScrollState
-import com.example.pecimobileapp.viewmodels.*
 
 fun encodeBase62(number: Long): String {
     val chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -32,6 +34,10 @@ fun encodeBase62(number: Long): String {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DefineWorkoutScreen(navController: NavController) {
+    val context = LocalContext.current
+    val profileViewModel: ProfileViewModel =
+        androidx.lifecycle.viewmodel.compose.viewModel(factory = ProfileViewModelFactory(context))
+
     var selectedZone by remember { mutableStateOf(1) }
     var workoutMode by remember { mutableStateOf("") } // "", "individual", "criar", "entrar"
     var groupNameInput by remember { mutableStateOf("") }

@@ -11,7 +11,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import com.example.pecimobileapp.mqtt.MqttManager
@@ -32,17 +31,16 @@ private val SENSOR_DATA3_UUID      = UUID.fromString("853f9ba1-94aa-4124-92ff-5a
 
 private val CLIENT_CFG_UUID        = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-private val CONFIG_SERVICE_UUID      = UUID.fromString("0a3b6985-dad6-4759-8852-dcb266d3a59e")
-private val CONFIG_SSID_UUID         = UUID.fromString("ab35e54e-fde4-4f83-902a-07785de547b9")
-private val CONFIG_PASS_UUID         = UUID.fromString("c1c4b63b-bf3b-4e35-9077-d5426226c710")
-private val CONFIG_SERVERIP_UUID     = UUID.fromString("0c954d7e-9249-456d-b949-cc079205d393")
+private val CONFIG_SERVICE_UUID    = UUID.fromString("0a3b6985-dad6-4759-8852-dcb266d3a59e")
+private val CONFIG_SSID_UUID       = UUID.fromString("ab35e54e-fde4-4f83-902a-07785de547b9")
+private val CONFIG_PASS_UUID       = UUID.fromString("c1c4b63b-bf3b-4e35-9077-d5426226c710")
+private val CONFIG_SERVERIP_UUID   = UUID.fromString("0c954d7e-9249-456d-b949-cc079205d393")
 
 class BleManager(private val context: Context) : BluetoothGattCallback() {
 
     private val TAG = "BleManager"
 
-    private val bluetoothManager =
-        context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val adapter: BluetoothAdapter? get() = bluetoothManager.adapter
     private var gatt: BluetoothGatt? = null
 
@@ -70,18 +68,50 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private val _allConfigSent = MutableStateFlow(false)
     val allConfigSent: StateFlow<Boolean> = _allConfigSent
 
-    // Novo estado para progresso da configuração
     private val _configProgress = MutableStateFlow(0f)
     val configProgress: StateFlow<Float> = _configProgress
-    
-    // Total de passos de configuração (escrita BLE, início do servidor, conexão de câmera)
-    private val totalConfigSteps = 5
 
+    private val totalConfigSteps = 5
     private val writeQueue = ArrayDeque<Pair<UUID, ByteArray>>()
     private var lastDevice: BluetoothDevice? = null
     private var retryCount = 0
     private val maxRetries = 3
-    private val retryDelayMs = 5_000L
+    private val retryDelayMs = 5000L
+
+    // Sessão atual
+    private var groupId: String = "grupo1"
+    private var userId: String = "aluno01"
+    private var exerciseId: String = "exercicio_teste"
+    private var selectedZone: Int = 1
+    private var zonas: List<Pair<String, IntRange>> = emptyList()
+
+    fun setSessionParameters(
+        group: String?,
+        user: String,
+        exercise: String,
+        selectedZone: Int,
+        zonasList: List<Pair<String, IntRange>>
+    ) {
+        this.groupId = group ?: "false"
+        this.userId = user
+        this.exerciseId = exercise
+        this.selectedZone = selectedZone
+        this.zonas = zonasList
+    }
+
+    @SuppressLint("MissingPermission")
+    fun startScan() {
+        val btAdapter = adapter ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
+            != PackageManager.PERMISSION_GRANTED
+        ) return
+
+        _scanResults.value = emptyList()
+        val scanner = btAdapter.bluetoothLeScanner ?: return
+        scanner.startScan(scanCb)
+        Handler(Looper.getMainLooper()).postDelayed({ scanner.stopScan(scanCb) }, 10_000)
+    }
 
     private val scanCb = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
@@ -94,25 +124,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     }
 
     @SuppressLint("MissingPermission")
-    fun startScan() {
-        val btAdapter = adapter ?: run {
-            Toast.makeText(context, "BLE não disponível", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            Toast.makeText(context, "Permissão BLUETOOTH_SCAN não concedida", Toast.LENGTH_SHORT).show()
-            return
-        }
-        _scanResults.value = emptyList()
-        val scanner = btAdapter.bluetoothLeScanner ?: return
-        scanner.startScan(scanCb)
-        Handler(Looper.getMainLooper()).postDelayed({ scanner.stopScan(scanCb) }, 10_000)
-    }
-
-    @SuppressLint("MissingPermission")
     private fun connect(device: BluetoothDevice) {
         lastDevice = device
         retryCount = 0
@@ -121,26 +132,24 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
             != PackageManager.PERMISSION_GRANTED
-        ) {
-            Toast.makeText(context, "Permissão BLUETOOTH_CONNECT não concedida", Toast.LENGTH_SHORT).show()
-            return
-        }
+        ) return
 
         gatt = device.connectGatt(context, false, this)
     }
 
-    private fun attemptReconnect() {
-        val device = lastDevice ?: return
-        if (retryCount < maxRetries) {
-            retryCount++
-            Handler(Looper.getMainLooper()).postDelayed({ connect(device) }, retryDelayMs)
-        } else {
-            _connectionLost.value = true
-        }
-    }
-
     fun connectPpg(device: BluetoothDevice) = connect(device)
     fun connectCam(device: BluetoothDevice) = connect(device)
+
+    private fun attemptReconnect() {
+        lastDevice?.let {
+            if (retryCount < maxRetries) {
+                retryCount++
+                Handler(Looper.getMainLooper()).postDelayed({ connect(it) }, retryDelayMs)
+            } else {
+                _connectionLost.value = true
+            }
+        }
+    }
 
     @SuppressLint("MissingPermission")
     override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
@@ -173,7 +182,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             }
         }
 
-        // inicia envio de configs se tiver fila
         if (writeQueue.isNotEmpty()) writeNextConfig()
     }
 
@@ -186,9 +194,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
         val raw = String(characteristic.value, Charsets.UTF_8)
-        val groupId = "grupo1"
-        val userId = "aluno01"
-        val exerciseId = "exercicio_teste"
 
         when (characteristic.uuid) {
             HR_CHAR_UUID -> {
@@ -197,8 +202,11 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
                 val hr = digits.toIntOrNull()
                 _ppgHeartRate.value = hr
                 saveToFile(raw)
-                hr?.let { MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it) }
+                hr?.let {
+                    MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it, selectedZone, zonas)
+                }
             }
+
             SENSOR_DATA1_UUID, SENSOR_DATA2_UUID, SENSOR_DATA3_UUID -> {
                 val temp = raw.substringAfter('.', "0").filter(Char::isDigit).toIntOrNull()?.div(100f) ?: 0f
                 val source = when (characteristic.uuid) {
@@ -208,14 +216,11 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
                     else -> "unknown"
                 }
                 saveToFile(raw)
-                MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp)
+                MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp, selectedZone, zonas)
             }
         }
     }
 
-    // ---------- CONFIGURATION ----------
-
-    @SuppressLint("MissingPermission")
     private fun writeNextConfig() {
         val (uuid, data) = writeQueue.firstOrNull() ?: run {
             _allConfigSent.value = true
@@ -227,6 +232,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             writeQueue.clear()
             return
         }
+
         val chr = svc.getCharacteristic(uuid) ?: run {
             writeQueue.removeFirst()
             writeNextConfig()
@@ -255,14 +261,10 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
         val uuid = characteristic.uuid
         val success = status == BluetoothGatt.GATT_SUCCESS
-        
-        // Incrementar o progresso em vez de mostrar Toast
+
         if (success) {
-            // Incrementa o progresso baseado em quantos itens já foram processados
             val step = 1f / totalConfigSteps
-            val currentProgress = _configProgress.value
-            _configProgress.value = currentProgress + step
-            
+            _configProgress.value += step
             Log.d(TAG, "Configuração BLE: progresso atualizado para ${_configProgress.value * 100}%")
         }
 
