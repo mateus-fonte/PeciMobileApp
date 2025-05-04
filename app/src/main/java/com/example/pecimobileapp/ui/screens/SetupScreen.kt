@@ -107,7 +107,7 @@ fun SetupScreen(
                 .padding(16.dp)
         ) {
             // 🔌 Seção de conexão com o dispositivo PPG / Smartwatch via BLE
-            BleConnectionSection(
+            SimpleBleConnectionSection(
                 title = "PPG / Smartwatch",
                 scanResults = ppgResults,
                 isConnected = ppgConnected,
@@ -120,16 +120,15 @@ fun SetupScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // 🔌 Seção de conexão com a câmera térmica via BLE
-            BleConnectionSection(
-                title = "Câmera Térmica",
+            // 🔌 Seção de conexão com a câmera térmica via BLE com funcionalidades específicas
+            ThermalCameraBleSection(
                 scanResults = camResults,
                 isConnected = useBle,
                 onScan = { viewModel.startCamScan() },
                 onConnect = { viewModel.connectCam(it) },
-                allowedDeviceNames = listOf("THERMAL_CAM"), // Apenas dispositivos com "THERMAL_CAM" no nome
                 buttonColor = purpleButtonColor,
                 buttonIcon = { CameraThermometerIcon() },
+                wsViewModel = wsViewModel, // WebSocketViewModel para verificação do AP
                 onAdvancedOptions = { ssid, password, device -> 
                     try {
                         // Log para depuração - verificar se esta parte está sendo executada
@@ -139,7 +138,7 @@ fun SetupScreen(
                         val bleManager = viewModel.getBleManager()
                         if (bleManager == null) {
                             android.util.Log.e("SetupScreen", "BleManager não disponível!")
-                            return@BleConnectionSection
+                            return@ThermalCameraBleSection
                         }
                         
                         android.util.Log.d("SetupScreen", "BleManager obtido com sucesso, enviando para configuração")
