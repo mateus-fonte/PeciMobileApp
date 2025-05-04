@@ -78,6 +78,19 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private val maxRetries = 3
     private val retryDelayMs = 5000L
 
+    // Adicionando variáveis para verificação periódica de conexão
+    private val connectionCheckHandler = Handler(Looper.getMainLooper())
+    private val connectionCheckRunnable = object : Runnable {
+        override fun run() {
+            checkConnection()
+            // Agendar novamente em 5 segundos
+            connectionCheckHandler.postDelayed(this, 5000)
+        }
+    }
+    private var lastCommunicationTime = System.currentTimeMillis()
+    private val connectionTimeout = 10000L // 10 segundos
+    private var connectionCheckActive = false
+
     // Sessão atual
     private var groupId: String = "grupo1"
     private var userId: String = "aluno01"
@@ -135,6 +148,9 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         ) return
 
         gatt = device.connectGatt(context, false, this)
+
+        // Iniciar verificação periódica de conexão
+        startConnectionCheck()
     }
 
     fun connectPpg(device: BluetoothDevice) = connect(device)
@@ -147,8 +163,52 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
                 Handler(Looper.getMainLooper()).postDelayed({ connect(it) }, retryDelayMs)
             } else {
                 _connectionLost.value = true
+                stopConnectionCheck()
             }
         }
+    }
+
+    // Método para iniciar verificação periódica
+    private fun startConnectionCheck() {
+        if (!connectionCheckActive) {
+            connectionCheckActive = true
+            lastCommunicationTime = System.currentTimeMillis()
+            connectionCheckHandler.postDelayed(connectionCheckRunnable, 5000)
+        }
+    }
+
+    // Método para parar verificação periódica
+    private fun stopConnectionCheck() {
+        connectionCheckActive = false
+        connectionCheckHandler.removeCallbacks(connectionCheckRunnable)
+    }
+
+    // Verificar se a conexão está ativa
+    private fun checkConnection() {
+        if (!_connected.value) return
+
+        val timeSinceLastCommunication = System.currentTimeMillis() - lastCommunicationTime
+        if (timeSinceLastCommunication > connectionTimeout) {
+            Log.d(TAG, "Conexão parece estar inativa por $timeSinceLastCommunication ms. Considerando como desconectada.")
+            handleConnectionLost()
+        }
+    }
+
+    // Lidar com conexão perdida
+    private fun handleConnectionLost() {
+        if (_connected.value) {
+            Log.d(TAG, "Detectada desconexão por inatividade")
+            _connected.value = false
+            _connectionLost.value = true
+            gatt?.close()
+            gatt = null
+            stopConnectionCheck()
+        }
+    }
+
+    // Atualizar timestamp da última comunicação
+    private fun updateLastCommunicationTime() {
+        lastCommunicationTime = System.currentTimeMillis()
     }
 
     @SuppressLint("MissingPermission")
@@ -157,6 +217,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             retryCount = 0
             _connected.value = true
             g.discoverServices()
+            updateLastCommunicationTime()
         } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
             _connected.value = false
             attemptReconnect()
@@ -183,17 +244,21 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         }
 
         if (writeQueue.isNotEmpty()) writeNextConfig()
+        updateLastCommunicationTime()
     }
 
     override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
         if (status == BluetoothGatt.GATT_SUCCESS) {
             _connected.value = true
         }
+        updateLastCommunicationTime()
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
         val raw = String(characteristic.value, Charsets.UTF_8)
+
+        updateLastCommunicationTime()
 
         when (characteristic.uuid) {
             HR_CHAR_UUID -> {
@@ -244,6 +309,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             writeQueue.removeFirst()
             writeNextConfig()
         }
+        updateLastCommunicationTime()
     }
 
     fun sendAllConfigs(ssid: String, password: String, serverIp: String) {
@@ -261,6 +327,8 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     override fun onCharacteristicWrite(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
         val uuid = characteristic.uuid
         val success = status == BluetoothGatt.GATT_SUCCESS
+
+        updateLastCommunicationTime()
 
         if (success) {
             val step = 1f / totalConfigSteps
@@ -283,6 +351,20 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             FileWriter(file, true).use { it.append(data).append("\n") }
         } catch (e: IOException) {
             Log.e(TAG, "Erro ao salvar no arquivo", e)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun disconnect() {
+        _connected.value = false
+        stopConnectionCheck()
+        try {
+            gatt?.disconnect()
+            gatt?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao desconectar", e)
+        } finally {
+            gatt = null
         }
     }
 }

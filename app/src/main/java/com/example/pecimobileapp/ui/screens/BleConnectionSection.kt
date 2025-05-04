@@ -183,7 +183,7 @@ fun ThermalCameraBleSection(
             // Mostrar mensagem se não houver dispositivos relevantes
             if (scanResults.isNotEmpty() && filteredResults.isEmpty()) {
                 Text(
-                    text = "Nenhuma câmera térmica encontrada. Procurando por dispositivos com nome THERMAL_CAM.",
+                    text = "Nenhuma câmera térmica encontrada. Procurando por dispositivos com nome THERMAL_CAM. Verifique se o dispositivo encontra-se ligado ou tente fazer reset.",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
