@@ -424,4 +424,27 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         // Se não encontrou rostos válidos, retorna a última temperatura válida
         return lastValidFaceTemperature
     }
+    
+    /**
+     * Verifica se o Access Point está ativo antes de permitir a configuração da câmera
+     * Se o AP não estiver ativo, retorna falso indicando que o usuário deve ser avisado
+     * 
+     * @return Pair<Boolean, String> - Primeiro valor: true se pode prosseguir, false caso contrário
+     *                               - Segundo valor: mensagem de erro, ou string vazia se não houver erro
+     */
+    fun checkBeforeCameraConfig(): Pair<Boolean, String> {
+        // Verificar se o Access Point está ativo
+        if (!checkAccessPointStatus()) {
+            return Pair(false, "O Access Point não está ativo. Por favor, ative o hotspot do dispositivo antes de configurar a câmera.")
+        }
+        
+        // Obter o IP da interface ap0
+        val apIp = getAccessPointIp()
+        if (apIp == null) {
+            return Pair(false, "Não foi possível obter o IP do Access Point. Verifique se o hotspot está configurado corretamente.")
+        }
+        
+        // Se tudo estiver OK, retorna true com mensagem vazia
+        return Pair(true, "")
+    }
 }
