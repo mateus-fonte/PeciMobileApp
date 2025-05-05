@@ -115,6 +115,7 @@ fun ThermalCameraBleSection(
     onScan: () -> Unit,
     onConnect: (BluetoothDevice) -> Unit,
     onAdvancedOptions: (String, String, BluetoothDevice) -> Unit,
+    onDisconnect: () -> Unit, // New parameter for disconnect function
     buttonColor: Color = MaterialTheme.colorScheme.primary,
     buttonIcon: @Composable () -> Unit = {},
     wsViewModel: WebSocketViewModel
@@ -212,7 +213,7 @@ fun ThermalCameraBleSection(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            filteredResults.forEach { result ->
+            filteredResults.forEach { result -> 
                 Button(
                     onClick = { 
                         selectedDevice = result.device
@@ -242,7 +243,15 @@ fun ThermalCameraBleSection(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Texto removido conforme solicitado
+                Button(
+                    onClick = onDisconnect,
+                    Modifier.padding(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Desconectar")
+                }
             }
             
             // Configurações WiFi para a câmera térmica

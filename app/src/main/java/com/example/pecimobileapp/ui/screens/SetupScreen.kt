@@ -142,6 +142,86 @@ fun CameraConnectionStatus(
     }
 }
 
+/**
+ * Componente que exibe controles para a conexão da câmera térmica via WebSocket
+ */
+@Composable
+fun ThermalCameraWSSection(
+    wsViewModel: WebSocketViewModel,
+    onDisconnect: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "Câmera Térmica via WebSocket",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            // Status da conexão
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "Conectado",
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Câmera conectada via WebSocket",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            
+            // Estatísticas de conexão
+            val stats by wsViewModel.connectionStats.collectAsState()
+            
+            Text(
+                text = "Clientes conectados: ${stats.clientsCount}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+            
+            Text(
+                text = "Frames recebidos: ${stats.receivedMessages}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+            
+            // Botão para desconectar
+            Button(
+                onClick = onDisconnect,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Desconectar",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Desconectar Câmera")
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun SetupScreen(
     viewModel: RealTimeViewModel,
@@ -212,6 +292,7 @@ fun SetupScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(paddingValues)
                 .padding(bottom = 16.dp) // Reduzido para deixar menos espaço entre o conteúdo e o botão
         ) {
             Column(
@@ -302,6 +383,7 @@ fun SetupScreen(
                         isConnected = useBle,
                         onScan = { viewModel.startCamScan() },
                         onConnect = { viewModel.connectCam(it) },
+                        onDisconnect = { viewModel.disconnectCam() }, // New disconnect callback
                         buttonColor = purpleButtonColor,
                         buttonIcon = { CameraThermometerIcon() },
                         wsViewModel = wsViewModel, // WebSocketViewModel para verificação do AP
@@ -513,6 +595,13 @@ fun SetupScreen(
                 // Exibir a pré-visualização da câmera quando estiver conectada via WebSocket
                 if (useWs && imageReceived) {
                     ThermalCameraPreview(wsViewModel)
+                    
+                    // Exibir a seção de controle do WebSocket com o botão de desconectar
+                    Spacer(Modifier.height(16.dp))
+                    ThermalCameraWSSection(
+                        wsViewModel = wsViewModel,
+                        onDisconnect = { wsViewModel.disconnectWs() }
+                    )
                 } else if (useWs && !imageReceived) {
                     // Mostra um estado de "carregando" quando está conectado via WebSocket mas ainda não recebeu imagens
                     Card(
@@ -546,6 +635,13 @@ fun SetupScreen(
                             )
                         }
                     }
+                    
+                    // Adicionar botão de desconexão mesmo durante o carregamento
+                    Spacer(Modifier.height(16.dp))
+                    ThermalCameraWSSection(
+                        wsViewModel = wsViewModel,
+                        onDisconnect = { wsViewModel.disconnectWs() }
+                    )
                 } else if (!useBle && !useWs) {
                     // Mensagem quando não há conexão
                     Card(

@@ -391,4 +391,44 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             gatt = null
         }
     }
+
+    /**
+     * Desconecta completamente o dispositivo BLE atual e reseta os estados
+     * Para ser usado quando quiser desconectar o ESP e retornar ao estado inicial
+     */
+    fun disconnectDevice() {
+        try {
+            Log.d(TAG, "Desconectando dispositivo BLE...")
+            
+            // Para a verificação periódica de conexão
+            stopConnectionCheck()
+            
+            // Limpa a fila de escrita
+            writeQueue.clear()
+            
+            // Desconecta o GATT e fecha a conexão
+            gatt?.let { gatt ->
+                gatt.disconnect()
+                gatt.close()
+                this.gatt = null
+            }
+            
+            // Reseta o estado de conexão e outros estados
+            _connected.value = false
+            _connectionLost.value = false
+            _allConfigSent.value = false
+            _configProgress.value = 0f
+            _ppgHeartRate.value = null
+            _avgTemp.value = null
+            _maxTemp.value = null
+            _minTemp.value = null
+            
+            // Limpa o dispositivo atual
+            lastDevice = null
+            
+            Log.d(TAG, "Dispositivo BLE desconectado com sucesso")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao desconectar dispositivo BLE", e)
+        }
+    }
 }

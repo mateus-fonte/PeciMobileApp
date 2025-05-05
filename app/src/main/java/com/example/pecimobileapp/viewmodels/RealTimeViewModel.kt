@@ -76,6 +76,7 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startCamScan() = viewModelScope.launch { bleCam.startScan() }
     fun connectCam(device: BluetoothDevice) = viewModelScope.launch { bleCam.connectCam(device) }
+    fun disconnectCam() = viewModelScope.launch { bleCam.disconnectDevice() }
 
     fun sendAllConfigs(
         ssid: String,

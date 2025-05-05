@@ -544,4 +544,35 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         // Se tudo estiver OK, retorna true com mensagem vazia
         return Pair(true, "")
     }
+    
+    /**
+     * Desconecta completamente o ESP, parando o servidor WebSocket e resetando os estados
+     */
+    fun disconnectESP() = viewModelScope.launch {
+        // Para o servidor WebSocket
+        webSocketServer.stopServer()
+        
+        // Reseta todos os estados relacionados ao ESP
+        _serverState.value = WebSocketServerService.ServerState.Stopped
+        _imageReceived.value = false
+        _wifiConfigStatus.value = WifiConfigStatus.NotConfigured
+        _setupProgress.value = 0f
+        _connectionError.value = null
+        
+        android.util.Log.d("WebSocketViewModel", "ESP desconectado completamente")
+    }
+    
+    /**
+     * Desconecta o WebSocket (método de conveniência para a UI)
+     */
+    fun disconnectWs() = viewModelScope.launch {
+        // Para o servidor WebSocket
+        stopServer()
+        
+        // Reseta os estados relacionados à conexão WebSocket
+        _imageReceived.value = false
+        _connectionError.value = null
+        
+        android.util.Log.d("WebSocketViewModel", "WebSocket desconectado")
+    }
 }
