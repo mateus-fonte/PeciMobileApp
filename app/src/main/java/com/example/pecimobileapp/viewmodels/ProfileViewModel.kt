@@ -1,9 +1,7 @@
-package com.example.pecimobileapp.viewmodels
+package com.example.pecimobileapp.ui
 
 import android.content.Context
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.viewmodels.ProfilePreferences
@@ -13,9 +11,9 @@ import java.util.*
 
 class ProfileViewModel(private val context: Context) : ViewModel() {
 
+    // Estado observável
     var nome by mutableStateOf("Maria")
-    var apelido by mutableStateOf("Sabinada")
-    var peso by mutableStateOf(62f)
+    var identificador by mutableStateOf("Sabinada")
     var anoNascimento by mutableStateOf(1992)
     var fcMaxManual by mutableStateOf<Int?>(null)
 
@@ -23,53 +21,62 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
         loadProfile()
     }
 
-    private fun loadProfile() {
+    // 🧠 Função auxiliar para tratar exceções nos Flow
+    private fun launchSafely(block: suspend () -> Unit) {
         viewModelScope.launch {
+            try {
+                block()
+            } catch (e: Exception) {
+                e.printStackTrace() // Pode trocar por Timber.e() ou log
+            }
+        }
+    }
+
+    private fun loadProfile() {
+        launchSafely {
             ProfilePreferences.nomeFlow(context).collectLatest { nome = it }
         }
-        viewModelScope.launch {
-            ProfilePreferences.apelidoFlow(context).collectLatest { apelido = it }
+        launchSafely {
+            ProfilePreferences.identificadorFlow(context).collectLatest { identificador = it }
         }
-        viewModelScope.launch {
-            ProfilePreferences.pesoFlow(context).collectLatest { peso = it }
-        }
-        viewModelScope.launch {
+        launchSafely {
             ProfilePreferences.anoNascimentoFlow(context).collectLatest { anoNascimento = it }
         }
-        viewModelScope.launch {
+        launchSafely {
             ProfilePreferences.fcMaxManualFlow(context).collectLatest { fcMaxManual = it }
         }
     }
 
     // Funções para alterar e salvar
-
     fun updateNome(novoNome: String) {
         nome = novoNome
-        viewModelScope.launch { ProfilePreferences.saveNome(context, novoNome) }
+        viewModelScope.launch {
+            ProfilePreferences.saveNome(context, novoNome)
+        }
     }
 
-    fun updateApelido(novoApelido: String) {
-        apelido = novoApelido
-        viewModelScope.launch { ProfilePreferences.saveApelido(context, novoApelido) }
-    }
-
-    fun updatePeso(novoPeso: Float) {
-        peso = novoPeso
-        viewModelScope.launch { ProfilePreferences.savePeso(context, novoPeso) }
+    fun updateIdentificador(novoIdentificador: String) {
+        identificador = novoIdentificador
+        viewModelScope.launch {
+            ProfilePreferences.saveIdentificador(context, novoIdentificador)
+        }
     }
 
     fun updateAnoNascimento(novoAno: Int) {
         anoNascimento = novoAno
-        viewModelScope.launch { ProfilePreferences.saveAnoNascimento(context, novoAno) }
+        viewModelScope.launch {
+            ProfilePreferences.saveAnoNascimento(context, novoAno)
+        }
     }
 
     fun updateFcMaxManual(novoFcMax: Int?) {
         fcMaxManual = novoFcMax
-        viewModelScope.launch { ProfilePreferences.saveFcMaxManual(context, novoFcMax) }
+        viewModelScope.launch {
+            ProfilePreferences.saveFcMaxManual(context, novoFcMax)
+        }
     }
 
-    // Funções calculadas (ficam iguais)
-
+    // Propriedades calculadas
     val idade: Int
         get() {
             val anoAtual = Calendar.getInstance().get(Calendar.YEAR)

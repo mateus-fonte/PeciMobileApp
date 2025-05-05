@@ -229,26 +229,26 @@ class OpenCVUtils(private val context: Context) {
                     // para reduzir a densidade da sobreposição
                     if (normalizedTemp > 0.3f) {
                         // Converte para cor (azul para valores baixos, vermelho para altos)
-                        val color = getColorForTemperature(normalizedTemp)
-                        
-                        // Define a cor do pincel
-                        paint.color = color
-                        
-                        // Desenha o retângulo correspondente na imagem
+                    val color = getColorForTemperature(normalizedTemp)
+                    
+                    // Define a cor do pincel
+                    paint.color = color
+                    
+                    // Desenha o retângulo correspondente na imagem
                         // Usando espaçamento entre os blocos para mostrar mais da imagem original
                         canvas.drawRect(
                             x * blockWidth + 1,
                             y * blockHeight + 1,
                             (x + 1) * blockWidth - 1,
                             (y + 1) * blockHeight - 1,
-                            paint
-                        )
+                        paint
+                    )
                     }
                 }
             }
         }
         
-        // Desenha uma legenda de cores
+                // Desenha uma legenda de cores
         drawThermalLegend(canvas, minTemp, maxTemp, bitmap.width, bitmap.height)
     }
     
@@ -341,25 +341,25 @@ class OpenCVUtils(private val context: Context) {
     private fun drawThermalLegend(canvas: Canvas, minTemp: Float, maxTemp: Float, width: Int, height: Int) {
         val paint = Paint().apply {
             style = Paint.Style.FILL
-        }
+                    }
         
         val textPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 30f
+            textSize = 20f  // Reduzido de 30f para 20f
             isFakeBoldText = true
             setShadowLayer(2f, 1f, 1f, Color.BLACK)
         }
         
         // Posição e tamanho da barra de legenda
         val legendWidth = width / 3
-        val legendHeight = 30
+        val legendHeight = 20  // Reduzido de 30 para 20
         val legendX = width - legendWidth - 20
         val legendY = height - legendHeight - 20
         
         // Desenha a barra de cores
         for (i in 0 until legendWidth) {
             val normalizedTemp = i.toFloat() / legendWidth
-            paint.color = getColorForTemperature(normalizedTemp)
+                        paint.color = getColorForTemperature(normalizedTemp)
             canvas.drawRect(
                 legendX + i.toFloat(),
                 legendY.toFloat(),
@@ -369,18 +369,21 @@ class OpenCVUtils(private val context: Context) {
             )
         }
         
-        // Desenha os valores mínimo e máximo
+        // Desenha os valores mínimo e máximo com melhor posicionamento
         canvas.drawText(
             String.format("%.1f°C", minTemp),
             legendX.toFloat(),
-            (legendY - 10).toFloat(),
+            (legendY - 5).toFloat(),  // Ajustado para ficar mais próximo da legenda
             textPaint
         )
         
+        val maxTempText = String.format("%.1f°C", maxTemp)
+        val maxTextWidth = textPaint.measureText(maxTempText)
+        
         canvas.drawText(
-            String.format("%.1f°C", maxTemp),
-            (legendX + legendWidth - 80).toFloat(),
-            (legendY - 10).toFloat(),
+            maxTempText,
+            (legendX + legendWidth - maxTextWidth).toFloat(),  // Alinhado à direita da legenda
+            (legendY - 5).toFloat(),  // Ajustado para ficar mais próximo da legenda
             textPaint
         )
     }

@@ -14,61 +14,69 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
     private val blePpg = BleManager(app)
     private val bleCam = BleManager(app)
 
-    // servidor WS para obter o IP
-    private val wsService = WebSocketServerService(app).apply {
-        startServer()
-    }
+    private val wsService = WebSocketServerService(app)
 
-    // 1) ScanResults separados
     val scanResultsPpg: StateFlow<List<ScanResult>> = blePpg.scanResults
     val scanResultsCam: StateFlow<List<ScanResult>> = bleCam.scanResults
 
-    // 2) Estados de conexão
     val isPpgConnected: StateFlow<Boolean> = blePpg.isConnected
     val isCamConnected: StateFlow<Boolean> = bleCam.isConnected
 
-    // novo: flows de “perda de conexão”
     val ppgConnectionLost: StateFlow<Boolean> = blePpg.connectionLost
     val camConnectionLost: StateFlow<Boolean> = bleCam.connectionLost
 
-    // 3) Dados por notify
     val ppgHeartRate: StateFlow<Int?> = blePpg.ppgHeartRate
-    val avgTemp:       StateFlow<Float?> = bleCam.avgTemp
-    val maxTemp:       StateFlow<Float?> = bleCam.maxTemp
-    val minTemp:       StateFlow<Float?> = bleCam.minTemp
+    val avgTemp: StateFlow<Float?> = bleCam.avgTemp
+    val maxTemp: StateFlow<Float?> = bleCam.maxTemp
+    val minTemp: StateFlow<Float?> = bleCam.minTemp
 
-    // 4) já conectados?
     val readyToStart: StateFlow<Boolean> = combine(isPpgConnected, isCamConnected) { ppg, cam -> ppg && cam }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val accessPointIp: StateFlow<String> = flow {
+        emit(wsService.getDeviceIpAddress())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
-    /** ❶ lista crua de "IP (interface)" */
-    val allNetworkIPs: StateFlow<List<String>> =
-        wsService.connectionStats
-            .map { it.allNetworkIPs }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    // Zona selecionada e faixas de zona
+    private val _selectedZone = MutableStateFlow(1)
+    val selectedZone: StateFlow<Int> = _selectedZone
 
-    /** ❷ extrai só o IP da interface de Wi-Fi (wlan0) ou fallback vazio */
-    val accessPointIp: StateFlow<String> =
-        allNetworkIPs
-            .map { list ->
-                list.firstOrNull { entry ->
-                    // ajusta aqui o nome da interface que for seu AP — ex: "wlan" ou "ap"
-                    entry.contains("(ap") && entry.length <= 22
-                }?.substringBefore(" ")
-                // substringBefore(" ") pega tudo antes do espaço, i.e. só o IP sem "(..."
-                    ?: ""
-            }
-            .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+    private val _zonas = MutableStateFlow<List<Pair<String, IntRange>>>(emptyList())
+    val zonas: StateFlow<List<Pair<String, IntRange>>> = _zonas
 
-    // UI triggers
+    // Adicionados para persistência de contexto da sessão
+    private val _groupId = MutableStateFlow<String?>(null)
+    val groupId: StateFlow<String?> = _groupId
+
+    private val _userId = MutableStateFlow("aluno01")
+    val userId: StateFlow<String> = _userId
+
+    private val _exerciseId = MutableStateFlow("exercicio_teste")
+    val exerciseId: StateFlow<String> = _exerciseId
+
+    fun setWorkoutParameters(
+        zone: Int,
+        zonasList: List<Pair<String, IntRange>>,
+        group: String? = null,
+        user: String = "aluno01",
+        exercise: String = "exercicio_teste"
+    ) {
+        _selectedZone.value = zone
+        _zonas.value = zonasList
+        _groupId.value = group
+        _userId.value = user
+        _exerciseId.value = exercise
+
+        blePpg.setSessionParameters(group, user, exercise, zone, zonasList)
+        bleCam.setSessionParameters(group, user, exercise, zone, zonasList)
+    }
+
     fun startPpgScan() = viewModelScope.launch { blePpg.startScan() }
     fun connectPpg(device: BluetoothDevice) = viewModelScope.launch { blePpg.connectPpg(device) }
 
     fun startCamScan() = viewModelScope.launch { bleCam.startScan() }
     fun connectCam(device: BluetoothDevice) = viewModelScope.launch { bleCam.connectCam(device) }
 
-    /** Enfileira e envia TODAS as configs de uma vez */
     fun sendAllConfigs(
         ssid: String,
         password: String
@@ -77,6 +85,5 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         bleCam.sendAllConfigs(ssid, password, ip)
     }
 
-
-
+    fun getBleManager(): BleManager = bleCam
 }
