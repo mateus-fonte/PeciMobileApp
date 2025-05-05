@@ -122,7 +122,7 @@ class WebSocketServerService(private val context: Context) {
         reconnectAttempts = 0
         
         // Verificar e encerrar todas as instâncias anteriores antes de continuar
-        if (!checkAndTerminatePriorInstances()) {
+        if (!checkAndTerminatePriorInstances(port)) {
             Log.w(TAG, "Não foi possível encerrar todas as instâncias anteriores, continuando mesmo assim...")
             // Continuamos mesmo assim, mas registramos o aviso
         }
@@ -134,14 +134,21 @@ class WebSocketServerService(private val context: Context) {
             return true
         }
 
+        // Começamos assumindo que usaremos a porta solicitada
         this.port = port
         
         // Verificar se a porta está disponível antes de iniciar o servidor
-        if (!isPortAvailable(port)) {
+        var portAvailable = isPortAvailable(port)
+        
+        // Se a porta principal não estiver disponível, tenta liberá-la
+        if (!portAvailable) {
             Log.w(TAG, "Porta $port já está em uso. Tentando liberar...")
             
             // Tentar liberar a porta
-            if (!releasePort(port)) {
+            if (releasePort(port)) {
+                portAvailable = true
+                Log.d(TAG, "Porta $port liberada com sucesso")
+            } else {
                 Log.e(TAG, "Não foi possível liberar a porta $port. Tentando portas alternativas...")
                 
                 // Tentar portas alternativas
@@ -150,15 +157,17 @@ class WebSocketServerService(private val context: Context) {
                     if (isPortAvailable(alternativePort)) {
                         Log.d(TAG, "Usando porta alternativa $alternativePort")
                         this.port = alternativePort
+                        portAvailable = true
                         break
                     }
                 }
-                
-                // Se não encontramos uma porta alternativa, reportar falha
-                if (this.port == port) {
-                    Log.e(TAG, "Não foi possível encontrar uma porta disponível")
-                    return false
-                }
+            }
+            
+            // Se não conseguimos encontrar nenhuma porta disponível, reportar falha
+            if (!portAvailable) {
+                Log.e(TAG, "Não foi possível encontrar uma porta disponível")
+                _serverState.value = ServerState.Error("Todas as portas estão ocupadas")
+                return false
             }
         }
         
@@ -428,6 +437,8 @@ class WebSocketServerService(private val context: Context) {
             socket.bind(InetSocketAddress("0.0.0.0", port), 1)
             result = true
             Log.d(TAG, "Porta $port está disponível")
+            // Consideramos a porta disponível se conseguirmos abrir um ServerSocket
+            return true
         } catch (e: Exception) {
             Log.d(TAG, "Porta $port está ocupada: ${e.message}")
             result = false
@@ -436,164 +447,75 @@ class WebSocketServerService(private val context: Context) {
             try {
                 socket?.close()
                 // Adicionar um pequeno delay após fechar o socket
-                Thread.sleep(200) // Aumentado de 100ms para 200ms
+                Thread.sleep(200)
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao fechar socket de teste", e)
             }
         }
         
-        // Verificação secundária usando java.net.Socket para detectar
-        // conexões em TIME_WAIT que podem não ser detectadas pelo ServerSocket
-        if (result) {
-            var clientSocket: Socket? = null
-            try {
-                clientSocket = Socket()
-                clientSocket.reuseAddress = true
-                // Define timeout mais longo para garantir resultados confiáveis
-                clientSocket.soTimeout = 1000 // Aumentado para 1 segundo
-                // Tenta conectar com timeout maior
-                clientSocket.connect(InetSocketAddress("127.0.0.1", port), 1000) // Aumentado para 1 segundo
-                // Se conseguir conectar, significa que há algo escutando na porta
-                Log.d(TAG, "Porta $port está ocupada (verificação secundária)")
-                result = false
-            } catch (e: ConnectException) {
-                // ConnectException indica que nada está escutando na porta
-                Log.d(TAG, "Porta $port confirmada disponível (verificação secundária)")
-                result = true
-            } catch (e: Exception) {
-                // Outras exceções indicam que a porta pode estar em transição
-                Log.d(TAG, "Verificação secundária inconclusiva para porta $port: ${e.message}")
-                // Em caso de dúvida, consideramos a porta como indisponível
-                result = false
-            } finally {
-                clientSocket?.close()
-            }
-        }
-        
-        return result
+        // Se chegarmos aqui, a porta não está disponível na verificação primária
+        return false
     }
     
     /**
-     * Verifica se existe uma instância anterior do servidor WebSocket em execução
-     * em qualquer porta e tenta encerrá-la.
-     * @return true se nenhuma instância anterior foi encontrada ou se todas foram encerradas com sucesso
+     * Verifica e libera a porta principal, sem verificar todas as portas da lista
+     * @param port A porta principal que desejamos usar
+     * @return true se a porta principal está disponível, false caso contrário
      */
-    private fun checkAndTerminatePriorInstances(): Boolean {
-        // Se temos uma instância ativa marcada, tenta encerrá-la primeiro
-        if (_isRunning.value && server != null) {
-            Log.d(TAG, "Instância ativa do servidor detectada, tentando encerrar")
-            stopServer()
-            // Pausa mais longa para permitir encerramento completo
-            Thread.sleep(2000)
+    private fun checkAndTerminatePriorInstances(port: Int): Boolean {
+        Log.d(TAG, "Verificando disponibilidade da porta $port antes de iniciar servidor")
+        
+        // Primeira verificação - se a porta está disponível, retorna true imediatamente
+        if (isPortAvailable(port)) {
+            Log.d(TAG, "Porta $port está disponível")
+            // Se a verificação primária diz que a porta está disponível, confiamos nela
+            return true
+        } else {
+            // A verificação primária já indicou que a porta não está disponível
+            Log.w(TAG, "Porta $port em uso, tentando liberar")
         }
         
-        // Lista de portas comuns para verificar
-        val portsToCheck = listOf(8080, 8081, 8082, 8083, 8090, 9000)
-        var allPortsFree = true
+        // Tenta liberar a porta
+        val released = releasePort(port)
         
-        // Verifica cada porta e tenta liberá-la se estiver em uso
-        for (portToCheck in portsToCheck) {
-            if (!isPortAvailable(portToCheck)) {
-                Log.w(TAG, "Porta $portToCheck em uso, tentando liberar")
-                if (!releasePort(portToCheck)) {
-                    allPortsFree = false
-                    Log.e(TAG, "Não foi possível liberar a porta $portToCheck")
-                } else {
-                    Log.d(TAG, "Porta $portToCheck liberada com sucesso")
-                }
-            }
+        if (released) {
+            Log.d(TAG, "Porta $port liberada com sucesso")
+            return true
+        } else {
+            Log.e(TAG, "Não foi possível liberar a porta $port")
+            return false
         }
-        
-        return allPortsFree
     }
     
     /**
-     * Tenta liberar uma porta que pode estar em estado TIME_WAIT
-     * Usa uma estratégia de espera adaptativa e força GC para ajudar na liberação de recursos
+     * Tenta liberar uma porta em uso, usando um método mais simples e robusto
+     * que evita acessar campos internos da classe ServerSocket que causava NoSuchFieldException.
+     * @param port A porta a ser liberada
+     * @return true se a operação foi bem-sucedida, false caso contrário
      */
     private fun releasePort(port: Int): Boolean {
         Log.d(TAG, "Tentando liberar a porta $port")
         
-        // Estratégia de espera adaptativa com verificações - dá tempo ao SO para liberar a porta
-        val timeoutsMs = listOf(500, 1000, 2000, 3000, 5000) // Tempos de espera progressivos
-        
-        // Forçar coleta de lixo para ajudar a liberar recursos
-        System.gc()
-        
-        // Tentativa 1: Liberação forçada usando SO_REUSEADDR e SO_LINGER
         try {
-            val forcedSocket = ServerSocket()
-            forcedSocket.reuseAddress = true
-            
-            // Define o valor SO_LINGER para 0 para forçar o encerramento imediato
-            try {
-                val socketClass = ServerSocket::class.java
-                val serverField = socketClass.getDeclaredField("impl")
-                serverField.isAccessible = true
-                val impl = serverField.get(forcedSocket)
-                val lingerField = impl.javaClass.getDeclaredField("fd")
-                lingerField.isAccessible = true
-                val fd = lingerField.get(impl)
-                val method = fd.javaClass.getDeclaredMethod("setOption", Int::class.java, Any::class.java)
-                method.isAccessible = true
-                // SO_LINGER = 128, valor 0 significa desabilitar
-                method.invoke(fd, 128, Integer(0))
-                Log.d(TAG, "SO_LINGER configurado para 0")
-            } catch (e: Exception) {
-                Log.e(TAG, "Não foi possível configurar SO_LINGER", e)
-            }
-            
-            try {
-                forcedSocket.soTimeout = 1000
-                forcedSocket.bind(InetSocketAddress("0.0.0.0", port))
-                forcedSocket.close()
-                Log.d(TAG, "Sucesso na liberação forçada da porta $port")
-                return true
-            } catch (e: Exception) {
-                Log.e(TAG, "Falha na liberação forçada da porta $port", e)
-                // Continua com outras tentativas
-            } finally {
-                try {
-                    forcedSocket.close()
-                } catch (e: Exception) {}
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao tentar liberação forçada da porta $port", e)
-        }
-        
-        // Tentativa 2: Esperar progressivamente e verificar disponibilidade
-        for (timeout in timeoutsMs) {
-            try {
-                Log.d(TAG, "Esperando ${timeout}ms para liberação natural da porta $port")
-                Thread.sleep(timeout.toLong())
-                
-                if (isPortAvailable(port)) {
-                    Log.d(TAG, "Porta $port liberada após espera de ${timeout}ms")
-                    return true
-                }
-            } catch (e: InterruptedException) {
-                Thread.currentThread().interrupt()
-                break
-            }
-        }
-        
-        // Tentativa 3: Tentar ativar a opção de reutilização em um novo socket
-        try {
-            Log.d(TAG, "Tentando abrir socket com opção de reutilização na porta $port")
+            // Tenta uma abordagem simplificada que não depende de acessar o campo impl
+            // Tenta abrir um socket na mesma porta com SO_REUSEADDR
             val socket = ServerSocket()
             socket.reuseAddress = true
-            socket.bind(InetSocketAddress("0.0.0.0", port))
+            socket.bind(InetSocketAddress(port))
             socket.close()
-            Thread.sleep(500)  // Pequena pausa após fechamento
             
-            Log.d(TAG, "Sucesso na liberação com SO_REUSEADDR para porta $port")
-            return true
+            // Aguarda um momento para que o sistema operacional libere completamente a porta
+            Thread.sleep(100)
+            
+            // Verifica novamente se a porta está disponível 
+            if (isPortAvailable(port)) {
+                Log.d(TAG, "Sucesso na liberação forçada da porta $port")
+                return true
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Falha na liberação com SO_REUSEADDR para porta $port", e)
+            Log.e(TAG, "Erro ao tentar liberar a porta $port: ${e.message}")
         }
         
-        // Porta ainda ocupada após todas as tentativas
-        Log.e(TAG, "Não foi possível liberar a porta $port após várias tentativas")
         return false
     }
     
