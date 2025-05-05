@@ -44,6 +44,12 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private val adapter: BluetoothAdapter? get() = bluetoothManager.adapter
     private var gatt: BluetoothGatt? = null
 
+    // Variáveis para armazenar as últimas configurações WiFi
+    private var lastWifiSsid: String = ""
+    private var lastWifiPassword: String = ""
+    private var lastServerIp: String = ""
+    private var hasStoredWifiConfig: Boolean = false
+
     private val _scanResults = MutableStateFlow<List<ScanResult>>(emptyList())
     val scanResults: StateFlow<List<ScanResult>> = _scanResults
 
@@ -218,6 +224,18 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             _connected.value = true
             g.discoverServices()
             updateLastCommunicationTime()
+            
+            // Se isso for uma reconexão (não uma conexão inicial) e tivermos configurações WiFi armazenadas
+            if (hasStoredWifiConfig && lastDevice != null) {
+                Log.d(TAG, "Reconexão bem-sucedida, reenviando configurações WiFi")
+                // Reenviar configurações WiFi após um pequeno delay para garantir que os serviços foram descobertos
+                Handler(Looper.getMainLooper()).postDelayed({
+                    if (_connected.value) {
+                        sendAllConfigs(lastWifiSsid, lastWifiPassword, lastServerIp)
+                        Log.d(TAG, "Configurações WiFi reenviadas automaticamente após reconexão")
+                    }
+                }, 2000) // 2 segundos de delay
+            }
         } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
             _connected.value = false
             attemptReconnect()
@@ -313,6 +331,12 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     }
 
     fun sendAllConfigs(ssid: String, password: String, serverIp: String) {
+        // Armazena as configurações WiFi para uso futuro durante reconexão
+        lastWifiSsid = ssid
+        lastWifiPassword = password
+        lastServerIp = serverIp
+        hasStoredWifiConfig = true
+        
         writeQueue.clear()
         writeQueue.addAll(
             listOf(
