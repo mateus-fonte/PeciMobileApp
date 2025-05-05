@@ -220,18 +220,49 @@
  class ServerIpCallback : public BLECharacteristicCallbacks {
    void onWrite(BLECharacteristic *pChar) override {
      String value = pChar->getValue();
-     strncpy(server_ip, value.c_str(), sizeof(server_ip) - 1);
-     server_ip[sizeof(server_ip) - 1] = '\0';
- 
-     if (isValidIP(server_ip)) {
-       Serial.print("[BLE] IP do servidor websocket atualizado para: ");
-       Serial.println(server_ip);
-       mode = SETTING;
+     
+     // Process the value to extract IP and port if in format "ip:port"
+     int colonPos = value.indexOf(':');
+     if (colonPos > 0 && colonPos < value.length() - 1) {
+       // String contains port information
+       String ipPart = value.substring(0, colonPos);
+       String portPart = value.substring(colonPos + 1);
+       
+       // Store IP
+       strncpy(server_ip, ipPart.c_str(), sizeof(server_ip) - 1);
+       server_ip[sizeof(server_ip) - 1] = '\0';
+       
+       // Parse and store port
+       serverPort = portPart.toInt();
+       
+       if (isValidIP(server_ip) && serverPort > 0) {
+         Serial.print("[BLE] IP do servidor websocket atualizado para: ");
+         Serial.println(server_ip);
+         Serial.print("[BLE] Porta do servidor websocket atualizada para: ");
+         Serial.println(serverPort);
+         mode = SETTING;
+       } else {
+         Serial.print("[BLE] IP ou porta inválidos recebidos: ");
+         Serial.print(server_ip);
+         Serial.print(":");
+         Serial.println(serverPort);
+       }
      } else {
-       Serial.print("[BLE] IP inválido recebido: ");
-       Serial.println(server_ip);
+       // Format doesn't include port, use only IP with default port
+       strncpy(server_ip, value.c_str(), sizeof(server_ip) - 1);
+       server_ip[sizeof(server_ip) - 1] = '\0';
+       
+       if (isValidIP(server_ip)) {
+         Serial.print("[BLE] IP do servidor websocket atualizado para: ");
+         Serial.println(server_ip);
+         Serial.println("[BLE] Usando porta padrão: 8080");
+         mode = SETTING;
+       } else {
+         Serial.print("[BLE] IP inválido recebido: ");
+         Serial.println(server_ip);
+       }
      }
- 
+
      Serial.flush();
    }
  };

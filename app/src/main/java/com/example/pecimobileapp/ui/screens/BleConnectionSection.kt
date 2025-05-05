@@ -133,6 +133,13 @@ fun ThermalCameraBleSection(
     // Estado para verificar se está em processo de configuração
     var isConfiguring by remember { mutableStateOf(false) }
     
+    // Resetar isConfiguring quando o dispositivo é desconectado
+    LaunchedEffect(isConnected) {
+        if (!isConnected) {
+            isConfiguring = false
+        }
+    }
+    
     // Estado para controlar a animação de piscar no aviso do AP
     var shouldFlashWarning by remember { mutableStateOf(false) }
     
@@ -235,13 +242,7 @@ fun ThermalCameraBleSection(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Câmera Térmica conectada!",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(8.dp)
-                )
+                // Texto removido conforme solicitado
             }
             
             // Configurações WiFi para a câmera térmica
@@ -348,6 +349,11 @@ fun ThermalCameraBleSection(
                                     apAlertMessage = "Por favor, preencha o SSID e senha do Access Point."
                                     showApAlert = true
                                 }
+                            } ?: run {
+                                // Se selectedDevice for nulo, mostrar alerta
+                                Log.e("ThermalCameraBleSection", "Dispositivo não selecionado!")
+                                apAlertMessage = "Erro: Dispositivo não selecionado. Por favor, reconecte a câmera."
+                                showApAlert = true
                             }
                         },
                         enabled = !isConfiguring && ssid.isNotEmpty() && password.isNotEmpty(),
