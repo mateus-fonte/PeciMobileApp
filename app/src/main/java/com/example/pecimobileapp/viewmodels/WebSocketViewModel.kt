@@ -32,6 +32,10 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     // Armazena a última temperatura válida do rosto principal
     private var lastValidFaceTemperature: Float = 0f
 
+    // Armazena a porta atual do servidor WebSocket
+    private val _currentServerPort = MutableStateFlow<Int>(8080)
+    val currentServerPort: StateFlow<Int> = _currentServerPort
+
     // Estado do servidor
     private val _serverState = MutableStateFlow<WebSocketServerService.ServerState>(WebSocketServerService.ServerState.Stopped)
     val serverState: StateFlow<WebSocketServerService.ServerState> = _serverState
@@ -117,14 +121,19 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
      * Inicia o servidor WebSocket
      */
     fun startServer(port: Int): Pair<Boolean, WebSocketServerService.ServerState> {
-        val result = webSocketServer.startServer(port)
+        val result = webSocketServer.startServer(port) { actualPort ->
+            // Armazena a porta real em que o servidor foi iniciado
+            _currentServerPort.value = actualPort
+            android.util.Log.d("WebSocketViewModel", "Servidor WebSocket iniciado na porta: $actualPort")
+        }
         if (result) {
             _serverState.value = WebSocketServerService.ServerState.Running
             _connectionError.value = null
         } else {
-            // Assume hotspot não ativo como causa padrão de falha
-            _serverState.value = WebSocketServerService.ServerState.HotspotNotActive
-            _connectionError.value = "Falha ao iniciar servidor WebSocket. Verifique o hotspot do dispositivo."
+            // Em vez de automaticamente assumir que o hotspot não está ativo,
+            // definimos um estado de erro genérico para fornecer feedback mais preciso
+            _serverState.value = WebSocketServerService.ServerState.Error("Não foi possível iniciar o servidor WebSocket")
+            _connectionError.value = "Falha ao iniciar servidor WebSocket. Verifique as configurações de rede e tente novamente."
         }
         return Pair(result, _serverState.value)
     }
@@ -205,14 +214,40 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
      */
     fun startServerWithApCheck(port: Int = 8080): Pair<Boolean, WebSocketServerService.ServerState> {
         // Verifica primeiro se o AP está ativo
-        if (!checkAccessPointStatus()) {
+        val isApActive = checkAccessPointStatus()
+        android.util.Log.d("WebSocketViewModel", "Verificação de AP antes de iniciar servidor: ${if (isApActive) "ATIVO" else "INATIVO"}")
+        
+        if (!isApActive) {
             _serverState.value = WebSocketServerService.ServerState.HotspotNotActive
             _connectionError.value = "O hotspot do dispositivo não está ativo. Por favor, ative-o para usar a câmera térmica."
             return Pair(false, _serverState.value)
         }
         
         // Se o AP estiver ativo, tenta iniciar o servidor
-        return startServer(port)
+        val result = startServer(port)
+        
+        // Se o servidor iniciou com sucesso, garantimos que o estado do servidor seja Running
+        // Isso evita condições de corrida onde o servidor inicia mas depois é marcado como parado
+        if (result.first) {
+            _serverState.value = WebSocketServerService.ServerState.Running
+            
+            // Garantir que, após iniciar o servidor com sucesso, quaisquer erros anteriores sejam limpos
+            _connectionError.value = null
+            
+            // Iniciar uma coroutine para verificar se o servidor continua ativo após inicialização bem-sucedida
+            viewModelScope.launch {
+                // Pequeno atraso para garantir que o servidor tenha tempo para estabilizar
+                delay(500)
+                // Verifica se o servidor está realmente rodando (via serviço)
+                if (webSocketServer.isRunning.value) {
+                    android.util.Log.d("WebSocketViewModel", "Servidor WebSocket está rodando após verificação adicional")
+                    // Forçar o estado como Running para evitar falsos negativos
+                    _serverState.value = WebSocketServerService.ServerState.Running
+                }
+            }
+        }
+        
+        return result
     }
     
     /**
@@ -297,8 +332,9 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
      * Fluxo:
      * 1. Verifica se o Access Point está ativo
      * 2. Obtém o IP da interface ap0
-     * 3. Envia as configurações WiFi para o ESP32 via BLE
-     * 4. Aguarda até que o AP esteja ativo e inicia o servidor WebSocket
+     * 3. Inicia o servidor WebSocket para obter a porta real
+     * 4. Envia as configurações WiFi para o ESP32 via BLE
+     * 5. Aguarda até que o ESP32 se conecte e inicia o servidor WebSocket
      * 
      * @param bleManager gerenciador BLE já conectado ao ESP32
      * @param ssid SSID do Access Point
@@ -349,38 +385,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 return@launch
             }
             
-            // 3. Envia as configurações WiFi para o ESP32 via BLE
-            android.util.Log.d("WebSocketViewModel", "Enviando configurações WiFi para ESP32: SSID=$ssid, IP=$apIp")
-            try {
-                // Tentar usar o método sendAllConfigs do BleManager
-                bleManager.sendAllConfigs(ssid, password, apIp)
-                android.util.Log.d("WebSocketViewModel", "Comando de envio de configurações executado")
-            } catch (e: Exception) {
-                android.util.Log.e("WebSocketViewModel", "⚠️ ERRO ao enviar configurações: ${e.message}", e)
-                _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro ao enviar configurações: ${e.message}")
-                _connectionError.value = "Erro ao enviar configurações para a câmera: ${e.message}"
-                bleProgressJob.cancel()
-                return@launch
-            }
-            
-            // Monitorar o status do envio das configurações
-            android.util.Log.d("WebSocketViewModel", "Monitorando status do envio de configurações...")
-            
-            // Aguardar até que as configurações sejam enviadas
-            while (!bleManager.allConfigSent.value) {
-                android.util.Log.d("WebSocketViewModel", "Status de configuração: AGUARDANDO")
-                kotlinx.coroutines.delay(1000)
-            }
-            
-            android.util.Log.d("WebSocketViewModel", "Status de configuração: ENVIADO")
-            
-            // Configuração BLE enviada com sucesso, avançamos para 60%
-            _setupProgress.value = 0.6f
-            
-            android.util.Log.d("WebSocketViewModel", "✅ Configurações enviadas com sucesso para ESP32")
-            _wifiConfigStatus.value = WifiConfigStatus.Configured
-            
-            // 4. Aguarda até que o ESP32 se conecte e inicia o servidor WebSocket
+            // 3. PRIMEIRO, inicia o servidor WebSocket para obter a porta real
             android.util.Log.d("WebSocketViewModel", "Iniciando servidor WebSocket...")
             
             try {
@@ -389,9 +394,43 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 android.util.Log.d("WebSocketViewModel", "Resultado do servidor: $serverResult")
                 
                 if (serverResult.first) {
-                    android.util.Log.d("WebSocketViewModel", "✅ Servidor WebSocket iniciado com sucesso!")
+                    android.util.Log.d("WebSocketViewModel", "✅ Servidor WebSocket iniciado com sucesso na porta: ${_currentServerPort.value}")
                     // Servidor iniciado, avançamos para 80%
                     _setupProgress.value = 0.8f
+                    
+                    // 4. DEPOIS, envia as configurações WiFi para o ESP32 via BLE com a porta correta
+                    android.util.Log.d("WebSocketViewModel", "Enviando configurações WiFi para ESP32: SSID=$ssid, IP=$apIp")
+                    try {
+                        // Incluir a porta real onde o servidor foi iniciado
+                        val ipWithPort = "$apIp:${_currentServerPort.value}"
+                        android.util.Log.d("WebSocketViewModel", "Enviando IP com porta real: $ipWithPort")
+                        // Tentar usar o método sendAllConfigs do BleManager
+                        bleManager.sendAllConfigs(ssid, password, ipWithPort)
+                        android.util.Log.d("WebSocketViewModel", "Comando de envio de configurações executado")
+                    } catch (e: Exception) {
+                        android.util.Log.e("WebSocketViewModel", "⚠️ ERRO ao enviar configurações: ${e.message}", e)
+                        _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro ao enviar configurações: ${e.message}")
+                        _connectionError.value = "Erro ao enviar configurações para a câmera: ${e.message}"
+                        bleProgressJob.cancel()
+                        return@launch
+                    }
+                    
+                    // Monitorar o status do envio das configurações
+                    android.util.Log.d("WebSocketViewModel", "Monitorando status do envio de configurações...")
+                    
+                    // Aguardar até que as configurações sejam enviadas
+                    while (!bleManager.allConfigSent.value) {
+                        android.util.Log.d("WebSocketViewModel", "Status de configuração: AGUARDANDO")
+                        kotlinx.coroutines.delay(1000)
+                    }
+                    
+                    android.util.Log.d("WebSocketViewModel", "Status de configuração: ENVIADO")
+                    
+                    // Configuração BLE enviada com sucesso, avançamos para 90%
+                    _setupProgress.value = 0.9f
+                    
+                    android.util.Log.d("WebSocketViewModel", "✅ Configurações enviadas com sucesso para ESP32")
+                    _wifiConfigStatus.value = WifiConfigStatus.Configured
                     
                     // Observar o recebimento da primeira imagem
                     viewModelScope.launch {
@@ -504,5 +543,36 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         
         // Se tudo estiver OK, retorna true com mensagem vazia
         return Pair(true, "")
+    }
+    
+    /**
+     * Desconecta completamente o ESP, parando o servidor WebSocket e resetando os estados
+     */
+    fun disconnectESP() = viewModelScope.launch {
+        // Para o servidor WebSocket
+        webSocketServer.stopServer()
+        
+        // Reseta todos os estados relacionados ao ESP
+        _serverState.value = WebSocketServerService.ServerState.Stopped
+        _imageReceived.value = false
+        _wifiConfigStatus.value = WifiConfigStatus.NotConfigured
+        _setupProgress.value = 0f
+        _connectionError.value = null
+        
+        android.util.Log.d("WebSocketViewModel", "ESP desconectado completamente")
+    }
+    
+    /**
+     * Desconecta o WebSocket (método de conveniência para a UI)
+     */
+    fun disconnectWs() = viewModelScope.launch {
+        // Para o servidor WebSocket
+        stopServer()
+        
+        // Reseta os estados relacionados à conexão WebSocket
+        _imageReceived.value = false
+        _connectionError.value = null
+        
+        android.util.Log.d("WebSocketViewModel", "WebSocket desconectado")
     }
 }

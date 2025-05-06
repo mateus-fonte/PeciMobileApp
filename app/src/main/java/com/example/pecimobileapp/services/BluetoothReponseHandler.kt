@@ -228,7 +228,17 @@ class BluetoothResponseHandler(private val context: Context) {
     private suspend fun getStatusViaHttp(ipAddress: String, timeoutMillis: Long): RaspberryPiStatus? {
         return withTimeoutOrNull(timeoutMillis) {
             try {
-                val url = URL("http://$ipAddress:8080")
+                // Verificar se o endereço já inclui a porta
+                val urlString = if (ipAddress.contains(":")) {
+                    "http://$ipAddress"
+                } else {
+                    // Use the default port since we can't access a WebSocketViewModel
+                    val port = 8080 // Default port
+                    "http://$ipAddress:$port"
+                }
+                
+                android.util.Log.d(TAG, "Tentando conectar via HTTP usando: $urlString")
+                val url = URL(urlString)
                 val connection = withContext(Dispatchers.IO) {
                     url.openConnection() as HttpURLConnection
                 }

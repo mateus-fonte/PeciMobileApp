@@ -76,13 +76,19 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startCamScan() = viewModelScope.launch { bleCam.startScan() }
     fun connectCam(device: BluetoothDevice) = viewModelScope.launch { bleCam.connectCam(device) }
+    fun disconnectCam() = viewModelScope.launch { bleCam.disconnectDevice() }
 
     fun sendAllConfigs(
         ssid: String,
         password: String
     ) = viewModelScope.launch {
         val ip = accessPointIp.value
-        bleCam.sendAllConfigs(ssid, password, ip)
+        // Using default port 8080 since we don't have access to WebSocketViewModel
+        val currentPort = 8080
+        // Use port with IP address
+        val ipWithPort = "$ip:$currentPort"
+        android.util.Log.d("RealTimeViewModel", "Enviando IP com porta: $ipWithPort")
+        bleCam.sendAllConfigs(ssid, password, ipWithPort)
     }
 
     fun getBleManager(): BleManager = bleCam
