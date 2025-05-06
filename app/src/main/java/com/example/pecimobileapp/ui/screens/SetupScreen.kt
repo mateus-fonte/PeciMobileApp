@@ -315,7 +315,7 @@ fun SetupScreen(
                     isConnected = ppgConnected,
                     onScan = { viewModel.startPpgScan() },
                     onConnect = { viewModel.connectPpg(it) },
-                    allowedDeviceNames = listOf("sw"), // Apenas dispositivos com "sw" no nome
+                    allowedDeviceNames = listOf("sw","ESP32_PPG"),
                     buttonColor = purpleButtonColor,
                     buttonIcon = { HeartEcgIcon() }
                 )
