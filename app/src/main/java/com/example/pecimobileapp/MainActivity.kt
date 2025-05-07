@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.pecimobileapp.ui.navigation.AppNavigation
 import com.example.pecimobileapp.ui.theme.PeciMobileAppTheme
 import com.example.pecimobileapp.viewmodels.BluetoothViewModel
+import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 import com.hivemq.client.mqtt.MqttClient
 import com.hivemq.client.mqtt.datatypes.MqttQos
 import kotlinx.coroutines.flow.collectLatest
@@ -27,6 +28,7 @@ import java.util.*
 
 class MainActivity : ComponentActivity() {
     private val bluetoothViewModel: BluetoothViewModel by viewModels()
+    private val webSocketViewModel: WebSocketViewModel by viewModels()
 
     private val bluetoothAdapter: BluetoothAdapter? by lazy {
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
@@ -58,9 +60,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Conectar os ViewModels para compartilhar informações do dispositivo
+        bluetoothViewModel.setWebSocketViewModel(webSocketViewModel)
+
         setContent {
             PeciMobileAppTheme {
-                AppNavigation(bluetoothViewModel)
+                AppNavigation(bluetoothViewModel, webSocketViewModel)
             }
         }
 

@@ -212,7 +212,8 @@ fun SetupScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = 16.dp) // Reduzido para deixar menos espaço entre o conteúdo e o botão
+                .padding(paddingValues)  // Aplicando o paddingValues do Scaffold aqui
+                .padding(bottom = 16.dp) // Padding adicional na parte inferior
         ) {
             Column(
                 Modifier
@@ -340,6 +341,10 @@ fun SetupScreen(
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
                             
+                            // Debug log para verificar o valor atual do progresso
+                            val progressPercentage = (setupProgress * 100).toInt()
+                            android.util.Log.d("SetupScreen", "Progresso atual: $progressPercentage%")
+                            
                             LinearProgressIndicator(
                                 progress = setupProgress,
                                 modifier = Modifier.fillMaxWidth().height(8.dp)
@@ -349,10 +354,11 @@ fun SetupScreen(
                             
                             // Texto explicativo baseado no progresso atual
                             val statusText = when {
-                                setupProgress < 0.4f -> "Enviando configurações WiFi..."
-                                setupProgress < 0.6f -> "Configurando rede WiFi..."
-                                setupProgress < 0.8f -> "Iniciando servidor WebSocket..."
-                                else -> "Aguardando conexão da câmera..."
+                                setupProgress < 0.4f -> "Enviando configurações WiFi... (${progressPercentage}%)"
+                                setupProgress < 0.6f -> "Configurando rede WiFi... (${progressPercentage}%)"
+                                setupProgress < 0.8f -> "Iniciando servidor WebSocket... (${progressPercentage}%)"
+                                setupProgress < 1f -> "Aguardando conexão da câmera... (${progressPercentage}%)"
+                                else -> "Configuração concluída! (100%)"
                             }
                             
                             Text(
