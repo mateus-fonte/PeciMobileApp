@@ -25,7 +25,7 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
     val context = LocalContext.current
     val viewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(context))
 
-    var anoNascimentoInput by remember { mutableStateOf(viewModel.anoNascimento.toString()) }
+    var anoNascimentoInput by remember { mutableStateOf(viewModel.anoNascimento?.toString() ?: "") }
     var anoValido by remember { mutableStateOf(false) }
     var tentouValidar by remember { mutableStateOf(false) }
 
@@ -51,21 +51,21 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
 
                     // Campo Nome
                     OutlinedTextField(
-                        value = viewModel.nome,
-                        onValueChange = { viewModel.updateNome(it) },
+                        value = viewModel.nome ?: "",
+                        onValueChange = { viewModel.updateNome(it.ifBlank { null }) },
                         label = { Text("Nome") },
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Campo Identificador
+                    // Campo Sobrenome
                     OutlinedTextField(
-                        value = viewModel.identificador,
+                        value = viewModel.sobrenome ?: "",
                         onValueChange = {
-                            if (it.length <= 10) viewModel.updateIdentificador(it)
+                            if (it.length <= 20) viewModel.updateSobrenome(it.ifBlank { null })
                         },
-                        label = { Text("Identificador (máx. 10 caracteres)") },
+                        label = { Text("Sobrenome (máx. 20 caracteres)") },
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -96,7 +96,7 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Ano válido",
-                                    tint = Color(0xFF4CAF50) // verde
+                                    tint = Color(0xFF4CAF50)
                                 )
                             } else {
                                 Icon(
@@ -108,7 +108,6 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                         }
                     }
 
-                    // Texto de erro
                     if (tentouValidar && !anoValido) {
                         Text(
                             text = "Ano inválido. Use um ano entre 1920 e $anoAtual.",
@@ -120,7 +119,6 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // Botão de validação
                     Button(
                         onClick = {
                             val ano = anoNascimentoInput.toIntOrNull()
@@ -155,9 +153,11 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Botão Salvar, só habilitado se ano válido
             Button(
-                onClick = onSave,
+                onClick = {
+                    viewModel.generateUserIdIfNeeded()
+                    onSave()
+                },
                 enabled = anoValido,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {

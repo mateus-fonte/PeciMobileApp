@@ -13,7 +13,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pecimobileapp.ui.ProfileViewModel
 import com.example.pecimobileapp.viewmodels.*
 
-
 @Composable
 fun ProfileScreen(navToEdit: () -> Unit = {}) {
     val context = LocalContext.current
@@ -36,18 +35,35 @@ fun ProfileScreen(navToEdit: () -> Unit = {}) {
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    ProfileField("Nome", viewModel.nome)
-                    ProfileField("Identificador", viewModel.identificador)
-                    ProfileField("Ano de Nascimento", "${viewModel.anoNascimento}")
-                    ProfileField("FC Máxima", "${viewModel.fcMax} bpm")
-                    ProfileField("Idade", "${viewModel.idade} anos")
+                    ProfileField("Nome", viewModel.nome ?: "(não preenchido)")
+                    ProfileField("Sobrenome", viewModel.sobrenome ?: "(não preenchido)")
+                    ProfileField(
+                        "Ano de Nascimento",
+                        viewModel.anoNascimento?.toString() ?: "(não preenchido)"
+                    )
+                    ProfileField(
+                        "FC Máxima",
+                        viewModel.fcMax?.toString()?.plus(" bpm") ?: "(indisponível)"
+                    )
+                    ProfileField(
+                        "Idade",
+                        viewModel.idade?.toString()?.plus(" anos") ?: "(indisponível)"
+                    )
+                    ProfileField("Identificador único (ID)", viewModel.userId ?: "(não gerado)")
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
             Text("Zonas de Frequência Cardíaca", style = MaterialTheme.typography.titleMedium)
-            viewModel.zonas.forEach { (nome, faixa) ->
-                Text("$nome: ${faixa.first} - ${faixa.last} bpm", style = MaterialTheme.typography.bodyLarge)
+            if (viewModel.zonas.isNotEmpty()) {
+                viewModel.zonas.forEach { (nome, faixa) ->
+                    Text(
+                        "$nome: ${faixa.first} - ${faixa.last} bpm",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            } else {
+                Text("Zonas indisponíveis.", style = MaterialTheme.typography.bodyLarge)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
