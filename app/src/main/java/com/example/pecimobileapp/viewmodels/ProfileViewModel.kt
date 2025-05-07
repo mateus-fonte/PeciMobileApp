@@ -97,4 +97,8 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
             "Zona 4" to (fcMax * 0.80).toInt()..(fcMax * 0.90).toInt(),
             "Zona 5" to (fcMax * 0.90).toInt()..fcMax
         )
+
+    val isProfileIncomplete: Boolean
+        get() = nome.isBlank() || identificador.isBlank() || anoNascimento !in 1920..Calendar.getInstance().get(Calendar.YEAR)
+
 }

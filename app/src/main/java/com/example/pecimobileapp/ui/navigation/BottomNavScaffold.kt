@@ -113,11 +113,6 @@ fun BottomNavScaffold() {
                             )
                         }
 
-                        Text(
-                            "Home",
-                            color = if (isMainSelected) Color.White else Color.LightGray,
-                            style = MaterialTheme.typography.labelSmall
-                        )
                     }
                 }
             }
