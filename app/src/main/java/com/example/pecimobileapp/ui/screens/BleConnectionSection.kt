@@ -33,6 +33,7 @@ fun SimpleBleConnectionSection(
     isConnected: Boolean,
     onScan: () -> Unit,
     onConnect: (BluetoothDevice) -> Unit,
+    onDisconnect: () -> Unit, // Novo parâmetro
     allowedDeviceNames: List<String>, // Lista de nomes de dispositivos permitidos
     buttonColor: Color = MaterialTheme.colorScheme.primary, // Cor personalizada para o botão
     buttonIcon: @Composable () -> Unit = {} // Ícone personalizado para o botão
@@ -87,6 +88,17 @@ fun SimpleBleConnectionSection(
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
+        } else {
+            // Adicionar botão de desconexão quando conectado
+            Button(
+                onClick = onDisconnect,
+                Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Desconectar $title")
+            }
         }
     }
 }
@@ -102,6 +114,7 @@ fun ThermalCameraBleSection(
     isConnected: Boolean,
     onScan: () -> Unit,
     onConnect: (BluetoothDevice) -> Unit,
+    onDisconnect: () -> Unit,
     onAdvancedOptions: (String, String, BluetoothDevice) -> Unit,
     buttonColor: Color = MaterialTheme.colorScheme.primary,
     buttonIcon: @Composable () -> Unit = {},
@@ -262,16 +275,20 @@ fun ThermalCameraBleSection(
                 )
             }
         } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // Adicionar botão de desconexão quando conectado
+            Button(
+                onClick = onDisconnect,
+                Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                )
             ) {
-                // Texto removido conforme solicitado
+                Text("Desconectar Câmera Térmica")
             }
-            
+
+            Spacer(Modifier.height(16.dp))
+
             // Configurações WiFi para a câmera térmica
-            Spacer(modifier = Modifier.height(8.dp))
-            
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(4.dp)
