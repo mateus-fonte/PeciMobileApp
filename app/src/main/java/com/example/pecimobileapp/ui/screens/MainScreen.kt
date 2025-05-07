@@ -68,14 +68,20 @@ fun MainScreen(
             if (!isPpgConnected && !useBle && !useWs) {
                 InstructionCard()
                 Spacer(Modifier.height(24.dp))
-
                 Spacer(modifier = Modifier.weight(1f)) // Para empurrar o botão para baixo
+                Button(
+                    onClick = { navController.navigate("profile") },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Configurar perfil", fontWeight = FontWeight.Bold)
+                }
                 Button(
                     onClick = { navController.navigate("setup") },
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Entendi! Vamos lá", fontWeight = FontWeight.Bold)
+                    Text("Configurar sensores", fontWeight = FontWeight.Bold)
                 }
             }
 
