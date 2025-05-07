@@ -87,19 +87,6 @@ fun SimpleBleConnectionSection(
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "$title conectado!",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(8.dp)
-                )
-            }
         }
     }
 }
