@@ -78,6 +78,23 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isCheckingStatus = MutableStateFlow(false)
     val isCheckingStatus: StateFlow<Boolean> = _isCheckingStatus.asStateFlow()
 
+    // Referência para o WebSocketViewModel
+    private var webSocketViewModel: WebSocketViewModel? = null
+
+    /**
+     * Define a referência para o WebSocketViewModel para permitir comunicação entre os ViewModels
+     * Isso é crucial para gerenciar o dispositivo da câmera térmica durante reconexões
+     */
+    fun setWebSocketViewModel(viewModel: WebSocketViewModel) {
+        this.webSocketViewModel = viewModel
+    }
+
+    /**
+     * Registra o dispositivo da câmera térmica no WebSocketViewModel
+     */
+    private fun setThermalCameraDevice(device: BluetoothDevice) {
+        webSocketViewModel?.setThermalCameraDevice(device)
+    }
 
     // Bluetooth adapter direct access
     private val bluetoothManager = application.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
@@ -140,6 +157,7 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         connectToDevice(device)
     }
 
+    // Quando um novo dispositivo é conectado, atualizamos o dispositivo no ViewModel
     fun connectToDevice(device: BluetoothDevice) {
         viewModelScope.launch {
             // First select the device
@@ -150,6 +168,12 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
 
             // Get the device name
             val deviceName = bluetoothRepository.getDeviceName(device) ?: "Unknown Device"
+
+            // Registra o dispositivo no ViewModel para reconexões automáticas
+            if (deviceName.contains("THERMAL_CAM", ignoreCase = true)) {
+                setThermalCameraDevice(device)
+                Log.d(TAG, "Dispositivo da câmera térmica registrado no ViewModel: ${device.name}")
+            }
 
             // Set connected state directly
             _isConnected.value = true
@@ -484,7 +508,6 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
     fun getDeviceName(device: BluetoothDevice): String? {
         return bluetoothRepository.getDeviceName(device)
     }
-
 
     override fun onCleared() {
         super.onCleared()
