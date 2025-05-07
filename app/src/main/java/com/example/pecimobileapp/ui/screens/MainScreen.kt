@@ -9,14 +9,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
+import androidx.navigation.NavHostController
+
+
 
 @Composable
 fun MainScreen(
     viewModel: RealTimeViewModel,
-    wsViewModel: WebSocketViewModel
+    wsViewModel: WebSocketViewModel,
+    navController: NavHostController // Adicione o NavController aqui
 ) {
     // 1) Coleta dos valores
     val hr             by viewModel.ppgHeartRate.collectAsState()
@@ -59,8 +64,20 @@ fun MainScreen(
         ) {
             Text("Bom treino, ciclista!", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(16.dp))
-            InstructionCard()
-            Spacer(Modifier.height(24.dp))
+            // Só mostra instruções se nenhum sensor estiver conectado
+            if (!isPpgConnected && !useBle && !useWs) {
+                InstructionCard()
+                Spacer(Modifier.height(24.dp))
+
+                Spacer(modifier = Modifier.weight(1f)) // Para empurrar o botão para baixo
+                Button(
+                    onClick = { navController.navigate("setup") },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Entendi! Vamos lá", fontWeight = FontWeight.Bold)
+                }
+            }
 
             // --- Card de Frequência Cardíaca ---
             if (isPpgConnected) {
