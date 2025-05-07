@@ -182,24 +182,9 @@ class OpenCVUtils(private val context: Context) {
     }
     
     /**
-     * Sobrepõe os dados térmicos na imagem
+     * Sobrepõe os dados térmicos na imagem usando o algoritmo COLORMAP_JET
      */
     private fun overlayThermalData(bitmap: Bitmap, thermalData: FloatArray) {
-        val canvas = Canvas(bitmap)
-        val paint = Paint().apply {
-            style = Paint.Style.FILL
-            alpha = 5  // Reduzido drasticamente para apenas 2% de opacidade
-        }
-        
-        val originalWidth = bitmap.width
-        val originalHeight = bitmap.height
-        val thermalWidth = 32
-        val thermalHeight = 24
-        
-        // Tamanho de cada "pixel" térmico quando sobreposto à imagem original
-        val blockWidth = originalWidth.toFloat() / thermalWidth
-        val blockHeight = originalHeight.toFloat() / thermalHeight
-        
         // Encontrar mínimo e máximo para normalização
         var minTemp = Float.MAX_VALUE
         var maxTemp = Float.MIN_VALUE
@@ -215,41 +200,57 @@ class OpenCVUtils(private val context: Context) {
         if (minTemp < 20f || minTemp == Float.MAX_VALUE) minTemp = 20f
         if (maxTemp > 40f || maxTemp == Float.MIN_VALUE) maxTemp = 40f
         
-        // Desenhar cada "pixel" térmico - apenas mostrando os pontos mais significativos
-        for (y in 0 until thermalHeight) {
-            for (x in 0 until thermalWidth) {
-                val index = y * thermalWidth + x
-                val temperature = thermalData[index]
-                
-                if (!temperature.isNaN() && temperature != 0f) {
-                    // Normaliza a temperatura para um valor entre 0 e 1
-                    val normalizedTemp = (temperature - minTemp) / (maxTemp - minTemp)
-                    
-                    // Só mostra pixel térmico se estiver acima de um limiar
-                    // para reduzir a densidade da sobreposição
-                    if (normalizedTemp > 0.3f) {
-                        // Converte para cor (azul para valores baixos, vermelho para altos)
-                    val color = getColorForTemperature(normalizedTemp)
-                    
-                    // Define a cor do pincel
-                    paint.color = color
-                    
-                    // Desenha o retângulo correspondente na imagem
-                        // Usando espaçamento entre os blocos para mostrar mais da imagem original
-                        canvas.drawRect(
-                            x * blockWidth + 1,
-                            y * blockHeight + 1,
-                            (x + 1) * blockWidth - 1,
-                            (y + 1) * blockHeight - 1,
-                        paint
-                    )
-                    }
-                }
+        val thermalWidth = 32
+        val thermalHeight = 24
+        
+        // Processar imagem conforme o algoritmo fornecido:
+        // 1. Normalizar a matriz térmica para valores de 0-255
+        val normalizedData = ByteArray(thermalData.size)
+        for (i in thermalData.indices) {
+            val temp = thermalData[i]
+            if (temp.isNaN() || temp == 0f) {
+                normalizedData[i] = 0
+            } else {
+                val normalized = ((temp - minTemp) / (maxTemp - minTemp) * 255).toInt().coerceIn(0, 255)
+                normalizedData[i] = normalized.toByte()
             }
         }
         
-                // Desenha uma legenda de cores
+        // 2. Converter para Mat e aplicar colormap
+        val thermalMat = Mat(thermalHeight, thermalWidth, CvType.CV_8UC1)
+        thermalMat.put(0, 0, normalizedData)
+
+        // 2.1 Aplicar Gaussian Blur antes do colormap
+        val blurredMat = Mat()
+        Imgproc.GaussianBlur(thermalMat, blurredMat, Size(3.0, 3.0), 0.0)
+        
+        // 2.2 Aplicar o colormap JET no resultado suavizado
+        val colorMat = Mat()
+        Imgproc.applyColorMap(blurredMat, colorMat, Imgproc.COLORMAP_JET)
+        
+        // 3. Redimensionar para o tamanho da imagem original usando interpolação cúbica
+        val resizedMat = Mat()
+        Imgproc.resize(colorMat, resizedMat, Size(bitmap.width.toDouble(), bitmap.height.toDouble()), 0.0, 0.0, Imgproc.INTER_CUBIC)
+        
+        // 4. Converter para Bitmap
+        val thermalBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(resizedMat, thermalBitmap)
+        
+        // 5. Sobrepor na imagem original com opacidade reduzida
+        val canvas = Canvas(bitmap)
+        val paint = Paint().apply {
+            alpha = 80  // Opacidade de ~30%
+        }
+        canvas.drawBitmap(thermalBitmap, 0f, 0f, paint)
+        
+        // 6. Desenhar legenda de cores
         drawThermalLegend(canvas, minTemp, maxTemp, bitmap.width, bitmap.height)
+        
+        // Liberar recursos
+        thermalMat.release()
+        blurredMat.release()
+        colorMat.release()
+        resizedMat.release()
     }
     
     /**
@@ -290,76 +291,31 @@ class OpenCVUtils(private val context: Context) {
     }
     
     /**
-     * Obtém uma cor baseada na temperatura normalizada (0-1)
-     * De azul (frio) para vermelho (quente)
-     */
-    private fun getColorForTemperature(normalizedTemp: Float): Int {
-        // Convertemos o valor normalizado para uma cor do espectro (azul -> ciano -> verde -> amarelo -> vermelho)
-        return when {
-            normalizedTemp < 0.2f -> {
-                // Azul para ciano
-                val ratio = normalizedTemp / 0.2f
-                val r = 0
-                val g = (255 * ratio).toInt()
-                val b = 255
-                Color.rgb(r, g, b)
-            }
-            normalizedTemp < 0.4f -> {
-                // Ciano para verde
-                val ratio = (normalizedTemp - 0.2f) / 0.2f
-                val r = 0
-                val g = 255
-                val b = (255 * (1 - ratio)).toInt()
-                Color.rgb(r, g, b)
-            }
-            normalizedTemp < 0.6f -> {
-                // Verde para amarelo
-                val ratio = (normalizedTemp - 0.4f) / 0.2f
-                val r = (255 * ratio).toInt()
-                val g = 255
-                val b = 0
-                Color.rgb(r, g, b)
-            }
-            normalizedTemp < 0.8f -> {
-                // Amarelo para vermelho
-                val ratio = (normalizedTemp - 0.6f) / 0.2f
-                val r = 255
-                val g = (255 * (1 - ratio)).toInt()
-                val b = 0
-                Color.rgb(r, g, b)
-            }
-            else -> {
-                // Vermelho
-                Color.rgb(255, 0, 0)
-            }
-        }
-    }
-    
-    /**
      * Desenha uma legenda para o mapa térmico
      */
     private fun drawThermalLegend(canvas: Canvas, minTemp: Float, maxTemp: Float, width: Int, height: Int) {
         val paint = Paint().apply {
             style = Paint.Style.FILL
-                    }
+        }
         
         val textPaint = Paint().apply {
             color = Color.WHITE
-            textSize = 20f  // Reduzido de 30f para 20f
+            textSize = 20f
             isFakeBoldText = true
             setShadowLayer(2f, 1f, 1f, Color.BLACK)
         }
         
         // Posição e tamanho da barra de legenda
         val legendWidth = width / 3
-        val legendHeight = 20  // Reduzido de 30 para 20
+        val legendHeight = 20
         val legendX = width - legendWidth - 20
         val legendY = height - legendHeight - 20
         
-        // Desenha a barra de cores
+        // Desenha a barra de cores usando COLORMAP_JET
         for (i in 0 until legendWidth) {
-            val normalizedTemp = i.toFloat() / legendWidth
-                        paint.color = getColorForTemperature(normalizedTemp)
+            val normalizedPos = i.toFloat() / legendWidth
+            val color = getJetColor(normalizedPos)
+            paint.color = color
             canvas.drawRect(
                 legendX + i.toFloat(),
                 legendY.toFloat(),
@@ -369,11 +325,11 @@ class OpenCVUtils(private val context: Context) {
             )
         }
         
-        // Desenha os valores mínimo e máximo com melhor posicionamento
+        // Desenha os valores mínimo e máximo
         canvas.drawText(
             String.format("%.1f°C", minTemp),
             legendX.toFloat(),
-            (legendY - 5).toFloat(),  // Ajustado para ficar mais próximo da legenda
+            (legendY - 5).toFloat(),
             textPaint
         )
         
@@ -382,10 +338,52 @@ class OpenCVUtils(private val context: Context) {
         
         canvas.drawText(
             maxTempText,
-            (legendX + legendWidth - maxTextWidth).toFloat(),  // Alinhado à direita da legenda
-            (legendY - 5).toFloat(),  // Ajustado para ficar mais próximo da legenda
+            (legendX + legendWidth - maxTextWidth).toFloat(),
+            (legendY - 5).toFloat(),
             textPaint
         )
+    }
+    
+    /**
+     * Retorna uma cor COLORMAP_JET para um valor normalizado (0-1)
+     */
+    private fun getJetColor(v: Float): Int {
+        // Implementação simplificada do mapa de cores JET
+        val r: Int
+        val g: Int
+        val b: Int
+        
+        val v = v.coerceIn(0f, 1f)
+        
+        when {
+            v < 0.125f -> {
+                r = 0
+                g = 0
+                b = (255 * (0.5 + v / 0.125f)).toInt().coerceIn(0, 255)
+            }
+            v < 0.375f -> {
+                r = 0
+                g = (255 * (v - 0.125f) / 0.25f).toInt().coerceIn(0, 255)
+                b = 255
+            }
+            v < 0.625f -> {
+                r = (255 * (v - 0.375f) / 0.25f).toInt().coerceIn(0, 255)
+                g = 255
+                b = (255 * (1 - (v - 0.375f) / 0.25f)).toInt().coerceIn(0, 255)
+            }
+            v < 0.875f -> {
+                r = 255
+                g = (255 * (1 - (v - 0.625f) / 0.25f)).toInt().coerceIn(0, 255)
+                b = 0
+            }
+            else -> {
+                r = (255 * (1 - (v - 0.875f) / 0.125f)).toInt().coerceIn(0, 255)
+                g = 0
+                b = 0
+            }
+        }
+        
+        return Color.rgb(r, g, b)
     }
     
     /**
