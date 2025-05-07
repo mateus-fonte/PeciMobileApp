@@ -91,8 +91,8 @@ fun CameraConnectionStatus(
     }
     
     val statusColor = when (connectionState) {
-        "WEBSOCKET" -> Color(0xFF4CAF50) // Verde (era Azul)
-        "BLUETOOTH" -> Color(0xFF2196F3) // Azul (era Verde)
+        "WEBSOCKET" -> Color(0xFF4CAF50) // Verde
+        "BLUETOOTH" -> Color(0xFF2196F3) // Azul
         else -> Color(0xFFE91E63) // Rosa/Vermelho
     }
     
@@ -108,18 +108,18 @@ fun CameraConnectionStatus(
         else -> Icons.Filled.SignalWifiOff
     }
     
-    // Componente mais sutil - sem card elevado, apenas um chip informativo
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Indicador de status (círculo colorido)
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(statusColor, CircleShape)
+        // Ícone do status (agora no lugar do círculo)
+        Icon(
+            imageVector = statusIcon,
+            contentDescription = "Status da câmera",
+            tint = statusColor,
+            modifier = Modifier.size(16.dp)
         )
         
         Spacer(modifier = Modifier.width(8.dp))
@@ -132,13 +132,60 @@ fun CameraConnectionStatus(
             modifier = Modifier.weight(1f)
         )
         
-        // Ícone do status
+        // Ícone do status no lado direito (removido pois agora está à esquerda)
+    }
+}
+
+/**
+ * Componente que exibe o status da conexão do PPG/Smartwatch de forma sutil
+ */
+@Composable
+fun PPGConnectionStatus(
+    isConnected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val statusColor = if (isConnected) {
+        Color(0xFF2196F3) // Azul
+    } else {
+        Color(0xFFE91E63) // Rosa/Vermelho
+    }
+    
+    val statusText = if (isConnected) {
+        "Conectado via Bluetooth"
+    } else {
+        "Desconectado"
+    }
+    
+    val statusIcon = if (isConnected) {
+        Icons.Filled.Bluetooth
+    } else {
+        Icons.Filled.BluetoothDisabled
+    }
+    
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Ícone do status (agora no lugar do círculo)
         Icon(
             imageVector = statusIcon,
-            contentDescription = "Status da câmera",
+            contentDescription = "Status do PPG/Smartwatch",
             tint = statusColor,
             modifier = Modifier.size(16.dp)
         )
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        Text(
+            text = statusText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        
+        // Ícone do status no lado direito (removido pois agora está à esquerda)
     }
 }
 
@@ -223,11 +270,19 @@ fun SetupScreen(
             ) {
                 // Título principal da seção PPG/Smartwatch
                 Text(
-                    text = "Dispositivo PPG / Smartwatch",
+                    text = "Smartwatch",
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 
+                // Status da conexão do PPG/Smartwatch
+                PPGConnectionStatus(
+                    isConnected = ppgConnected,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+                
+                Spacer(Modifier.height(16.dp))
+
                 // 🔌 Seção de conexão com o dispositivo PPG / Smartwatch via BLE
                 SimpleBleConnectionSection(
                     title = "PPG / Smartwatch",
@@ -235,39 +290,10 @@ fun SetupScreen(
                     isConnected = ppgConnected,
                     onScan = { viewModel.startPpgScan() },
                     onConnect = { viewModel.connectPpg(it) },
-                    allowedDeviceNames = listOf("sw"), // Apenas dispositivos com "sw" no nome
+                    allowedDeviceNames = listOf("sw", "ESP32_PPG"),
                     buttonColor = purpleButtonColor,
                     buttonIcon = { HeartEcgIcon() }
                 )
-
-                // Status da conexão movido para depois da seção de scan
-                if (ppgConnected) {
-                    Spacer(Modifier.height(8.dp))
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        ),
-                        elevation = CardDefaults.cardElevation(0.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.CheckCircle,
-                                contentDescription = "Conectado",
-                                tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Smartwatch conectado e pronto para uso",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
-                }
 
                 // Divisor entre seções
                 Spacer(Modifier.height(24.dp))
@@ -595,8 +621,8 @@ fun SetupScreen(
                 Spacer(Modifier.height(32.dp))
             }
 
-            // Botão fixo na parte inferior
-            Box(
+            // Botão fixo na parte inferior para iniciar atividade
+            /*Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
@@ -613,6 +639,7 @@ fun SetupScreen(
                         disabledContentColor = Color.White.copy(alpha = 0.7f)
                     )
                 ) {
+                    // Layout horizontal com ícone de bicicleta e texto
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
@@ -622,7 +649,7 @@ fun SetupScreen(
                         Text("Iniciar Atividade Física")
                     }
                 }
-            }
+            }*/
         }
     }
 }
