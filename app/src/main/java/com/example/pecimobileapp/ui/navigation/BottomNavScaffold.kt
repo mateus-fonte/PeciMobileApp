@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
@@ -50,7 +51,12 @@ fun BottomNavScaffold() {
             val isMainSelected = currentRoute == "main"
 
             Box {
-                NavigationBar(containerColor = Color(0xFF8A2BE2), modifier = Modifier.height(56.dp)) {
+                NavigationBar(
+                    containerColor = Color(0xFF8A2BE2),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                ) {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Settings, contentDescription = "Setup") },
                         label = { Text("Setup") },
@@ -64,6 +70,7 @@ fun BottomNavScaffold() {
                         )
                     )
 
+                    // Espaço vazio para centralizar o FAB
                     Spacer(modifier = Modifier.weight(1f, true))
 
                     NavigationBarItem(
@@ -80,40 +87,26 @@ fun BottomNavScaffold() {
                     )
                 }
 
-                // Botão Home Central com estilo igual aos outros
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(72.dp),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .background(
-                                    color = if (isMainSelected) Color.White else Color.Transparent,
-                                    shape = CircleShape
-                                )
-                                .clickable {
-                                    navController.navigate("main") {
-                                        popUpTo("main") { inclusive = true }
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Home,
-                                contentDescription = "Home",
-                                tint = if (isMainSelected) Color(0xFF8A2BE2) else Color.LightGray,
-                                modifier = Modifier.size(32.dp)
-                            )
+                // Botão central Home com FAB (sobrescrito corretamente)
+                FloatingActionButton(
+                    onClick = {
+                        navController.navigate("main") {
+                            popUpTo("main") { inclusive = true }
                         }
-
-                    }
+                    },
+                    containerColor = if (isMainSelected) Color.White else Color(0xFF8A2BE2),
+                    contentColor = if (isMainSelected) Color(0xFF8A2BE2) else Color.White,
+                    modifier = Modifier
+                        .size(64.dp)
+                        .align(Alignment.TopCenter)
+                        .offset(y = (-24).dp)
+                        .zIndex(1f)
+                ) {
+                    Icon(
+                        Icons.Default.Home,
+                        contentDescription = "Home",
+                        modifier = Modifier.size(32.dp)
+                    )
                 }
             }
         }
