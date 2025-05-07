@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,6 +37,8 @@ fun MainScreen(
     // Coletar a temperatura facial como estado observável
     val facialTemp     by wsViewModel.processedImage.collectAsState()
 
+    val perfilVisitado = rememberSaveable { mutableStateOf(false) }
+
     // Para exibir snackbars:
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -64,26 +67,44 @@ fun MainScreen(
         ) {
             Text("Bom treino, ciclista!", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(16.dp))
+
             // Só mostra instruções se nenhum sensor estiver conectado
             if (!isPpgConnected && !useBle && !useWs) {
-                InstructionCard()
-                Spacer(Modifier.height(24.dp))
-                Spacer(modifier = Modifier.weight(1f)) // Para empurrar o botão para baixo
-                Button(
-                    onClick = { navController.navigate("profile") },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Configurar perfil", fontWeight = FontWeight.Bold)
-                }
-                Button(
-                    onClick = { navController.navigate("setup") },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Configurar sensores", fontWeight = FontWeight.Bold)
+                    Column {
+                        InstructionCard()
+                    }
+
+                    Column {
+                        if (!perfilVisitado.value) {
+                            Button(
+                                onClick = {
+                                    navController.navigate("profile")
+                                    perfilVisitado.value = true
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Configurar perfil", fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Button(
+                                onClick = { navController.navigate("setup") },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Configurar sensores", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
+
 
             // --- Card de Frequência Cardíaca ---
             if (isPpgConnected) {
