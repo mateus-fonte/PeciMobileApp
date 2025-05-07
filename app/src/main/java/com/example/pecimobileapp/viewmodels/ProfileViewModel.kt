@@ -1,6 +1,7 @@
 package com.example.pecimobileapp.ui
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -12,22 +13,23 @@ import java.util.*
 class ProfileViewModel(private val context: Context) : ViewModel() {
 
     // Estado observável
-    var nome by mutableStateOf("Maria")
-    var identificador by mutableStateOf("Sabinada")
-    var anoNascimento by mutableStateOf(1992)
+    var nome by mutableStateOf<String?>(null)
+    var sobrenome by mutableStateOf<String?>(null)
+    var anoNascimento by mutableStateOf<Int?>(null)
     var fcMaxManual by mutableStateOf<Int?>(null)
+    var userId by mutableStateOf<String?>(null)
 
     init {
         loadProfile()
     }
 
-    // 🧠 Função auxiliar para tratar exceções nos Flow
+    // Função auxiliar para tratar exceções nos Flow
     private fun launchSafely(block: suspend () -> Unit) {
         viewModelScope.launch {
             try {
                 block()
             } catch (e: Exception) {
-                e.printStackTrace() // Pode trocar por Timber.e() ou log
+                e.printStackTrace()
             }
         }
     }
@@ -37,7 +39,7 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
             ProfilePreferences.nomeFlow(context).collectLatest { nome = it }
         }
         launchSafely {
-            ProfilePreferences.identificadorFlow(context).collectLatest { identificador = it }
+            ProfilePreferences.sobrenomeFlow(context).collectLatest { sobrenome = it }
         }
         launchSafely {
             ProfilePreferences.anoNascimentoFlow(context).collectLatest { anoNascimento = it }
@@ -45,24 +47,27 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
         launchSafely {
             ProfilePreferences.fcMaxManualFlow(context).collectLatest { fcMaxManual = it }
         }
+        launchSafely {
+            ProfilePreferences.userIdFlow(context).collectLatest { userId = it }
+        }
     }
 
     // Funções para alterar e salvar
-    fun updateNome(novoNome: String) {
+    fun updateNome(novoNome: String?) {
         nome = novoNome
         viewModelScope.launch {
             ProfilePreferences.saveNome(context, novoNome)
         }
     }
 
-    fun updateIdentificador(novoIdentificador: String) {
-        identificador = novoIdentificador
+    fun updateSobrenome(novoSobrenome: String?) {
+        sobrenome = novoSobrenome
         viewModelScope.launch {
-            ProfilePreferences.saveIdentificador(context, novoIdentificador)
+            ProfilePreferences.saveSobrenome(context, novoSobrenome)
         }
     }
 
-    fun updateAnoNascimento(novoAno: Int) {
+    fun updateAnoNascimento(novoAno: Int?) {
         anoNascimento = novoAno
         viewModelScope.launch {
             ProfilePreferences.saveAnoNascimento(context, novoAno)
@@ -76,29 +81,43 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
         }
     }
 
+    // Função para gerar userId apenas se ainda não existir e perfil estiver preenchido
+    fun generateUserIdIfNeeded() {
+        val perfilPreenchido = !nome.isNullOrBlank() && !sobrenome.isNullOrBlank() && anoNascimento != null
+
+        if (userId == null && perfilPreenchido) {
+            val novoId = UUID.randomUUID().toString()
+            userId = novoId
+            viewModelScope.launch {
+                ProfilePreferences.saveUserId(context, novoId)
+                Log.d("ProfileViewModel", "Novo userId gerado: $novoId")
+            }
+        } else {
+            Log.d("ProfileViewModel", "userId já existe ou perfil incompleto")
+        }
+    }
+
     // Propriedades calculadas
-    val idade: Int
+    val idade: Int?
         get() {
             val anoAtual = Calendar.getInstance().get(Calendar.YEAR)
-            return anoAtual - anoNascimento
+            return anoNascimento?.let { anoAtual - it }
         }
 
-    val fcMaxCalculada: Int
-        get() = (208 - 0.7 * idade).toInt()
+    val fcMaxCalculada: Int?
+        get() = idade?.let { (208 - 0.7 * it).toInt() }
 
-    val fcMax: Int
+    val fcMax: Int?
         get() = fcMaxManual ?: fcMaxCalculada
 
     val zonas: List<Pair<String, IntRange>>
-        get() = listOf(
-            "Zona 1" to (fcMax * 0.50).toInt()..(fcMax * 0.60).toInt(),
-            "Zona 2" to (fcMax * 0.60).toInt()..(fcMax * 0.70).toInt(),
-            "Zona 3" to (fcMax * 0.70).toInt()..(fcMax * 0.80).toInt(),
-            "Zona 4" to (fcMax * 0.80).toInt()..(fcMax * 0.90).toInt(),
-            "Zona 5" to (fcMax * 0.90).toInt()..fcMax
-        )
-
-    val isProfileIncomplete: Boolean
-        get() = nome.isBlank() || identificador.isBlank() || anoNascimento !in 1920..Calendar.getInstance().get(Calendar.YEAR)
-
+        get() = fcMax?.let { fc ->
+            listOf(
+                "Zona 1" to (fc * 0.50).toInt()..(fc * 0.60).toInt(),
+                "Zona 2" to (fc * 0.60).toInt()..(fc * 0.70).toInt(),
+                "Zona 3" to (fc * 0.70).toInt()..(fc * 0.80).toInt(),
+                "Zona 4" to (fc * 0.80).toInt()..(fc * 0.90).toInt(),
+                "Zona 5" to (fc * 0.90).toInt()..fc
+            )
+        } ?: emptyList()
 }
