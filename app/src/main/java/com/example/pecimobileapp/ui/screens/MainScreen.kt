@@ -244,9 +244,10 @@ fun InstructionCard() {
 
             // Lista de passos
             val steps = listOf(
+                "Completar Perfil.",
                 "Entrar na aba Setup.",
                 "Escanear e conectar seu sensor de batimento cardíaco.",
-                "Conectar a câmera térmica.",
+                "Escanear e conectar a câmera térmica.",
                 "Se conectar a câmera térmica por Wi-Fi 👉 envie o nome da rede e a senha.",
                 "Só então inicie a atividade desejada, individual ou em grupo."
             )
