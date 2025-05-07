@@ -21,15 +21,18 @@ import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
+import com.example.pecimobileapp.viewmodels.BluetoothViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BottomNavScaffold() {
+fun BottomNavScaffold(
+    bluetoothViewModel: BluetoothViewModel,
+    webSocketViewModel: WebSocketViewModel
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     val vm: RealTimeViewModel = viewModel()
-    val wsViewModel: WebSocketViewModel = viewModel()
 
     Scaffold(
         topBar = {
@@ -122,9 +125,9 @@ fun BottomNavScaffold() {
                 startDestination = "main",
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable("setup") { SetupScreen(vm, navController, wsViewModel) }
-                composable("main") { MainScreen(vm, wsViewModel, navController) }
-                composable("websocket") { WebSocketScreen(wsViewModel) }
+                composable("setup") { SetupScreen(vm, navController, webSocketViewModel) }
+                composable("main") { MainScreen(vm, webSocketViewModel, navController) }
+                composable("websocket") { WebSocketScreen(webSocketViewModel) }
                 composable("historico") {
                     HistoricoScreen(onBackClick = { navController.popBackStack() })
                 }
