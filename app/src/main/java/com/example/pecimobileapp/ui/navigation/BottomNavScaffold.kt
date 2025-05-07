@@ -1,12 +1,17 @@
 package com.example.pecimobileapp.ui.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
@@ -45,49 +50,82 @@ fun BottomNavScaffold(
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = Color(0xFF8A2BE2)) {
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-                    label = { Text("Home") },
-                    selected = currentRoute == "main",
-                    onClick = {
-                        navController.navigate("main") {
-                            popUpTo("main") { inclusive = true }
+            val isMainSelected = currentRoute == "main"
+
+            Box {
+                NavigationBar(containerColor = Color(0xFF8A2BE2), modifier = Modifier.height(56.dp)) {
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Settings, contentDescription = "Setup") },
+                        label = { Text("Setup") },
+                        selected = currentRoute == "setup",
+                        onClick = { navController.navigate("setup") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color.White,
+                            unselectedIconColor = Color.LightGray,
+                            selectedTextColor = Color.White,
+                            unselectedTextColor = Color.LightGray
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.weight(1f, true))
+
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Star, contentDescription = "Histórico") },
+                        label = { Text("Histórico") },
+                        selected = currentRoute == "historico",
+                        onClick = { navController.navigate("historico") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color.White,
+                            unselectedIconColor = Color.LightGray,
+                            selectedTextColor = Color.White,
+                            unselectedTextColor = Color.LightGray
+                        )
+                    )
+                }
+
+                // Botão Home Central com estilo igual aos outros
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .background(
+                                    color = if (isMainSelected) Color.White else Color.Transparent,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    navController.navigate("main") {
+                                        popUpTo("main") { inclusive = true }
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Home,
+                                contentDescription = "Home",
+                                tint = if (isMainSelected) Color(0xFF8A2BE2) else Color.LightGray,
+                                modifier = Modifier.size(32.dp)
+                            )
                         }
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.White,
-                        unselectedIconColor = Color.LightGray,
-                        selectedTextColor = Color.White,
-                        unselectedTextColor = Color.LightGray
-                    )
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Settings, contentDescription = "Setup") },
-                    label = { Text("Setup") },
-                    selected = currentRoute == "setup",
-                    onClick = { navController.navigate("setup") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.White,
-                        unselectedIconColor = Color.LightGray,
-                        selectedTextColor = Color.White,
-                        unselectedTextColor = Color.LightGray
-                    )
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Default.Star, contentDescription = "Histórico") },
-                    label = { Text("Histórico") },
-                    selected = currentRoute == "historico",
-                    onClick = { navController.navigate("historico") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.White,
-                        unselectedIconColor = Color.LightGray,
-                        selectedTextColor = Color.White,
-                        unselectedTextColor = Color.LightGray
-                    )
-                )
+
+                        Text(
+                            "Home",
+                            color = if (isMainSelected) Color.White else Color.LightGray,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
             }
         }
+
     ) { innerPadding ->
         Box(
             Modifier
