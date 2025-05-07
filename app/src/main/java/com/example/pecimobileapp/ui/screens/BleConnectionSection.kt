@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import android.util.Log
+import com.example.pecimobileapp.ble.BleManager  // Adicionando importação necessária
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 
 /**
@@ -133,9 +134,45 @@ fun ThermalCameraBleSection(
     // Estado para verificar se está em processo de configuração
     var isConfiguring by remember { mutableStateOf(false) }
     
-    // Resetar isConfiguring quando o dispositivo é desconectado
+    // Obtém o bleManager através do wsViewModel para acessar a conexão
+    val bleManager = wsViewModel.getBleManager()
+    
+    // Observe a flag de conexão real do BleManager
+    val isBleConnected by wsViewModel.isCameraConnected.collectAsState()
+    
+    // Efeito para registrar o dispositivo no ViewModel quando conectado pela primeira vez
+    LaunchedEffect(selectedDevice) {
+        if (selectedDevice != null) {
+            wsViewModel.setThermalCameraDevice(selectedDevice!!)
+            Log.d("ThermalCameraBleSection", "Dispositivo registrado no ViewModel: ${selectedDevice?.name}")
+        }
+    }
+    
+    // Efeito para atualizar o dispositivo selecionado quando a conexão BLE muda
+    LaunchedEffect(isBleConnected) {
+        if (isBleConnected) {
+            // Tenta recuperar o dispositivo do ViewModel
+            val deviceFromViewModel = wsViewModel.getThermalCameraDevice()
+            if (deviceFromViewModel != null && (selectedDevice == null || selectedDevice?.address != deviceFromViewModel.address)) {
+                Log.d("ThermalCameraBleSection", "Dispositivo recuperado após reconexão: ${deviceFromViewModel.name}")
+                selectedDevice = deviceFromViewModel
+            }
+        }
+    }
+    
+    // Verifica toda vez que isConnected mudar se temos um dispositivo válido
     LaunchedEffect(isConnected) {
-        if (!isConnected) {
+        if (isConnected) {
+            // Se estamos conectados e ainda não temos um dispositivo, tente recuperar do ViewModel
+            if (selectedDevice == null) {
+                val deviceFromViewModel = wsViewModel.getThermalCameraDevice()
+                if (deviceFromViewModel != null) {
+                    Log.d("ThermalCameraBleSection", "Dispositivo restaurado do ViewModel: ${deviceFromViewModel.name}")
+                    selectedDevice = deviceFromViewModel
+                }
+            }
+        } else {
+            // Se desconectado, reseta o estado de configuração
             isConfiguring = false
         }
     }

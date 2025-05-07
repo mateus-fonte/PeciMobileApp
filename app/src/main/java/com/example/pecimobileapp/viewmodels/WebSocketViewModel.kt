@@ -2,8 +2,12 @@ package com.example.pecimobileapp.viewmodels
 
 import android.app.Application
 import android.graphics.Bitmap
+import android.bluetooth.BluetoothDevice
+import android.content.SharedPreferences
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.preference.PreferenceManager
 import com.example.pecimobileapp.services.WebSocketServerService
 import kotlinx.coroutines.flow.*
 import com.example.pecimobileapp.utils.OpenCVUtils
@@ -18,6 +22,11 @@ import com.example.pecimobileapp.ble.BleManager
  */
 class WebSocketViewModel(application: Application) : AndroidViewModel(application) {
 
+    // SharedPreferences para armazenamento persistente
+    private val sharedPreferences: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(application)
+    private val CAMERA_MAC_ADDRESS_KEY = "thermal_camera_mac_address"
+    private val CAMERA_NAME_KEY = "thermal_camera_name"
+
     // Estados possíveis da configuração WiFi para ESP32
     sealed class WifiConfigStatus {
         object NotConfigured : WifiConfigStatus()
@@ -28,6 +37,13 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
 
     // Serviço WebSocket
     private val webSocketServer = WebSocketServerService(application.applicationContext)
+
+    // BleManager para a câmera térmica
+    private val bleManager = BleManager(getApplication())
+
+    // Observável para o estado de conexão da câmera
+    private val _isCameraConnected = MutableStateFlow(false)
+    val isCameraConnected: StateFlow<Boolean> = _isCameraConnected
 
     // Armazena a última temperatura válida do rosto principal
     private var lastValidFaceTemperature: Float = 0f
@@ -68,6 +84,110 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     
     // Imagem processada com OpenCV (com detecção facial e sobreposição térmica)
     val processedImage: StateFlow<Pair<Bitmap?, List<OpenCVUtils.FaceData>>> = webSocketServer.processedImage
+
+    /**
+     * Armazena o último dispositivo Bluetooth da câmera térmica conectado
+     * Usado para garantir que a referência persista entre reconexões automáticas
+     */
+    private var _lastConnectedThermalCamera: BluetoothDevice? = null
+    
+    /**
+     * Define o dispositivo da câmera térmica que está atualmente conectado
+     * Isso é crucial para que a UI possa recuperar a referência durante reconexões
+     * Também salva o endereço MAC e nome do dispositivo nas SharedPreferences para persistência
+     */
+    fun setThermalCameraDevice(device: BluetoothDevice) {
+        // Verificar se temos as permissões necessárias em Android 12+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            val context = getApplication<Application>().applicationContext
+            if (context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != 
+                    android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                android.util.Log.w("WebSocketViewModel", "Permissão BLUETOOTH_CONNECT não concedida para setThermalCameraDevice")
+                return
+            }
+        }
+        
+        try {
+            _lastConnectedThermalCamera = device
+            
+            // Salvar o endereço MAC e nome nas SharedPreferences para persistência
+            sharedPreferences.edit()
+                .putString(CAMERA_MAC_ADDRESS_KEY, device.address)
+                .putString(CAMERA_NAME_KEY, device.name ?: "Câmera Térmica")
+                .apply()
+                
+            android.util.Log.d("WebSocketViewModel", "Dispositivo da câmera térmica armazenado em SharedPreferences: ${device.name} (${device.address})")
+        } catch (e: SecurityException) {
+            android.util.Log.e("WebSocketViewModel", "Erro de permissão ao acessar dispositivo Bluetooth: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Obtém o dispositivo da câmera térmica atualmente conectado
+     * Primeiro tenta usar a referência em memória, depois tenta recuperar do BleManager,
+     * e por último tenta reconstruir o dispositivo a partir do endereço MAC salvo
+     * 
+     * @return O dispositivo Bluetooth da câmera ou null se não houver conexão ativa
+     */
+    fun getThermalCameraDevice(): BluetoothDevice? {
+        // 1. Se já temos uma referência em memória, retorná-la
+        if (_lastConnectedThermalCamera != null) {
+            return _lastConnectedThermalCamera
+        }
+        
+        // 2. Se não temos um dispositivo salvo, tente recuperar do BleManager
+        if (bleManager.isConnected.value) {
+            try {
+                val field = BleManager::class.java.getDeclaredField("lastDevice")
+                field.isAccessible = true
+                _lastConnectedThermalCamera = field.get(bleManager) as? BluetoothDevice
+                if (_lastConnectedThermalCamera != null) {
+                    return _lastConnectedThermalCamera
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("WebSocketViewModel", "Não foi possível recuperar o dispositivo do BleManager", e)
+            }
+        }
+        
+        // 3. Se ainda não temos o dispositivo, tentar reconstruí-lo a partir do endereço MAC salvo
+        try {
+            val savedMacAddress = sharedPreferences.getString(CAMERA_MAC_ADDRESS_KEY, null)
+            if (savedMacAddress != null) {
+                android.util.Log.d("WebSocketViewModel", "Tentando recuperar dispositivo do endereço MAC salvo: $savedMacAddress")
+                
+                // Verificar se temos a permissão de Bluetooth antes de prosseguir
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    // Para Android 12+ (API 31+), precisamos verificar a permissão BLUETOOTH_CONNECT
+                    val context = getApplication<Application>().applicationContext
+                    if (context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != 
+                            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        android.util.Log.w("WebSocketViewModel", "Permissão BLUETOOTH_CONNECT não concedida")
+                        return null
+                    }
+                }
+                
+                try {
+                    // Obter o adaptador Bluetooth do sistema para recuperar o dispositivo pelo endereço
+                    val bluetoothAdapter = android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+                    if (bluetoothAdapter != null) {
+                        // Usar BluetoothAdapter.getRemoteDevice(address) para reconstruir o objeto do dispositivo
+                        val device = bluetoothAdapter.getRemoteDevice(savedMacAddress)
+                        _lastConnectedThermalCamera = device
+                        android.util.Log.d("WebSocketViewModel", "Dispositivo reconstruído com sucesso a partir do endereço MAC salvo")
+                        return device
+                    }
+                } catch (e: SecurityException) {
+                    // Captura especificamente SecurityException que pode ser lançada se a permissão não foi concedida
+                    android.util.Log.e("WebSocketViewModel", "Erro de permissão ao acessar Bluetooth: ${e.message}", e)
+                    return null
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("WebSocketViewModel", "Erro ao recuperar dispositivo a partir do endereço MAC salvo", e)
+        }
+        
+        return null
+    }
     
     // Inicializa o monitoramento de imagens recebidas
     init {
@@ -113,6 +233,28 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                     _connectionError.value = "A câmera térmica foi desconectada do servidor WebSocket."
                 }
                 lastClientCount = stats.clientsCount
+            }
+        }
+
+        // Observa o estado de conexão do BleManager da câmera
+        viewModelScope.launch {
+            bleManager.isConnected.collect { isConnected -> 
+                _isCameraConnected.value = isConnected
+                
+                // Se a conexão for perdida, atualiza o estado
+                if (!isConnected && _isCameraConnected.value) {
+                    android.util.Log.d("WebSocketViewModel", "Conexão BLE com a câmera perdida")
+                }
+            }
+        }
+        
+        // Observa se a conexão foi perdida explicitamente
+        viewModelScope.launch {
+            bleManager.connectionLost.collect { isLost ->
+                if (isLost) {
+                    android.util.Log.d("WebSocketViewModel", "BleManager reportou perda de conexão")
+                    _connectionError.value = "A conexão Bluetooth com a câmera foi perdida"
+                }
             }
         }
     }
@@ -248,34 +390,6 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         }
         
         return result
-    }
-    
-    /**
-     * Aguarda até que o AP esteja ativo e então inicia o servidor WebSocket
-     * @param timeoutMs tempo máximo de espera em milissegundos
-     * @param checkIntervalMs intervalo entre verificações em milissegundos
-     */
-    fun waitForApAndStartServer(port: Int = 8080, timeoutMs: Long = 30000, checkIntervalMs: Long = 1000) = viewModelScope.launch {
-        var elapsed = 0L
-        var serverStarted = false
-        
-        while (elapsed < timeoutMs && !serverStarted) {
-            if (checkAccessPointStatus()) {
-                val result = startServer(port)
-                serverStarted = result.first
-                if (serverStarted) {
-                    break
-                }
-            }
-            
-            kotlinx.coroutines.delay(checkIntervalMs)
-            elapsed += checkIntervalMs
-        }
-        
-        if (!serverStarted) {
-            _serverState.value = WebSocketServerService.ServerState.HotspotNotActive
-            _connectionError.value = "Não foi possível iniciar o servidor WebSocket após várias tentativas."
-        }
     }
     
     /**
@@ -432,16 +546,48 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                     android.util.Log.d("WebSocketViewModel", "✅ Configurações enviadas com sucesso para ESP32")
                     _wifiConfigStatus.value = WifiConfigStatus.Configured
                     
+                    // Aguarda pela primeira imagem, com timeout de 10 segundos
+                    var imageReceived = false
+                    var connectionTimeoutJob: Job? = null
+                    
+                    // Configurar o timeout de 10 segundos
+                    connectionTimeoutJob = viewModelScope.launch {
+                        android.util.Log.d("WebSocketViewModel", "⏱️ Iniciando timeout de 10 segundos para receber imagem da câmera")
+                        delay(10000) // 10 segundos
+                        if (!imageReceived && _imageReceived.value == false) {
+                            android.util.Log.d("WebSocketViewModel", "⚠️ TIMEOUT: Não foi possível receber imagem da câmera em 10 segundos")
+                            _connectionError.value = "Timeout: A câmera não se conectou em 10 segundos. Verifique as configurações e tente novamente."
+                            _wifiConfigStatus.value = WifiConfigStatus.Failed("Timeout na conexão")
+                            _setupProgress.value = 0f
+                            prepareRetry()
+                            bleManager.disconnect() // Desconecta o BLE para permitir nova tentativa
+                        }
+                    }
+                    
                     // Observar o recebimento da primeira imagem
-                    viewModelScope.launch {
+                    val imageMonitorJob = viewModelScope.launch {
                         // Espera pela primeira imagem
                         latestCameraImage.collect { (bitmap, _) ->
                             if (bitmap != null && _setupProgress.value < 1f) {
                                 // Imagem recebida, progresso completo
+                                imageReceived = true
                                 _setupProgress.value = 1f
                                 _imageReceived.value = true
+                                connectionTimeoutJob?.cancel() // Cancela o job de timeout
                                 android.util.Log.d("WebSocketViewModel", "✅ Primeira imagem recebida, configuração completa!")
                                 return@collect
+                            }
+                        }
+                    }
+                    
+                    // Monitorar a contagem de clientes também
+                    viewModelScope.launch {
+                        connectionStats.collect { stats ->
+                            if (stats.clientsCount > 0 && !imageReceived) {
+                                imageReceived = true
+                                _setupProgress.value = 0.95f
+                                connectionTimeoutJob?.cancel() // Cancela o job de timeout
+                                android.util.Log.d("WebSocketViewModel", "✅ Cliente conectado ao WebSocket, aguardando imagem...")
                             }
                         }
                     }
@@ -543,5 +689,14 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         
         // Se tudo estiver OK, retorna true com mensagem vazia
         return Pair(true, "")
+    }
+
+    /**
+     * Obtém o BleManager principal usado para a câmera térmica
+     * Este método é necessário para que a UI possa acessar o estado interno do BleManager
+     * durante reconexões automáticas
+     */
+    fun getBleManager(): BleManager {
+        return bleManager
     }
 }
