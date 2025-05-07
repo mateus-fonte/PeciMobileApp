@@ -82,7 +82,8 @@ fun BicycleIcon(tint: Color = LocalContentColor.current, size: Dp = 24.dp) {
 fun CameraConnectionStatus(
     useBle: Boolean,
     useWs: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showTitle: Boolean = true
 ) {
     val connectionState = when {
         useWs -> "WEBSOCKET"
@@ -112,27 +113,37 @@ fun CameraConnectionStatus(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (showTitle) Arrangement.SpaceBetween else Arrangement.End
     ) {
-        // Ícone do status (agora no lugar do círculo)
-        Icon(
-            imageVector = statusIcon,
-            contentDescription = "Status da câmera",
-            tint = statusColor,
-            modifier = Modifier.size(16.dp)
-        )
+        if (showTitle) {
+            Text(
+                text = "Status da câmera",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+        }
         
-        Spacer(modifier = Modifier.width(8.dp))
-        
-        // Texto do status mais discreto
-        Text(
-            text = statusText,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
-        
-        // Ícone do status no lado direito (removido pois agora está à esquerda)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
+            Icon(
+                imageVector = statusIcon,
+                contentDescription = "Status da câmera",
+                tint = statusColor,
+                modifier = Modifier.size(16.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -142,7 +153,8 @@ fun CameraConnectionStatus(
 @Composable
 fun PPGConnectionStatus(
     isConnected: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showTitle: Boolean = true
 ) {
     val statusColor = if (isConnected) {
         Color(0xFF2196F3) // Azul
@@ -166,26 +178,37 @@ fun PPGConnectionStatus(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (showTitle) Arrangement.SpaceBetween else Arrangement.End
     ) {
-        // Ícone do status (agora no lugar do círculo)
-        Icon(
-            imageVector = statusIcon,
-            contentDescription = "Status do PPG/Smartwatch",
-            tint = statusColor,
-            modifier = Modifier.size(16.dp)
-        )
+        if (showTitle) {
+            Text(
+                text = "Status do PPG/Smartwatch",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+        }
         
-        Spacer(modifier = Modifier.width(8.dp))
-        
-        Text(
-            text = statusText,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
-        
-        // Ícone do status no lado direito (removido pois agora está à esquerda)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End
+        ) {
+            Icon(
+                imageVector = statusIcon,
+                contentDescription = "Status do PPG/Smartwatch",
+                tint = statusColor,
+                modifier = Modifier.size(16.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -268,20 +291,24 @@ fun SetupScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp)
             ) {
-                // Título principal da seção PPG/Smartwatch
-                Text(
-                    text = "Smartwatch",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                
-                // Status da conexão do PPG/Smartwatch
-                PPGConnectionStatus(
-                    isConnected = ppgConnected,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-                
-                Spacer(Modifier.height(16.dp))
+                // Título principal e status da seção PPG/Smartwatch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Smartwatch",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    
+                    // Status da conexão do PPG/Smartwatch
+                    PPGConnectionStatus(
+                        isConnected = ppgConnected,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        showTitle = false
+                    )
+                }
 
                 // 🔌 Seção de conexão com o dispositivo PPG / Smartwatch via BLE
                 SimpleBleConnectionSection(
@@ -290,6 +317,7 @@ fun SetupScreen(
                     isConnected = ppgConnected,
                     onScan = { viewModel.startPpgScan() },
                     onConnect = { viewModel.connectPpg(it) },
+                    onDisconnect = { viewModel.disconnectPpg() },
                     allowedDeviceNames = listOf("sw", "ESP32_PPG"),
                     buttonColor = purpleButtonColor,
                     buttonIcon = { HeartEcgIcon() }
@@ -305,20 +333,26 @@ fun SetupScreen(
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
                 
-                // Título da seção da câmera térmica
-                Text(
-                    text = "Câmera Térmica",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-                
-                // Status da conexão da câmera térmica
-                CameraConnectionStatus(
-                    useBle = useBle,
-                    useWs = useWs,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-                
+                // Título e status da seção da câmera térmica
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Câmera Térmica",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    
+                    // Status da conexão da câmera térmica
+                    CameraConnectionStatus(
+                        useBle = useBle,
+                        useWs = useWs,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        showTitle = false
+                    )
+                }
+
                 Spacer(Modifier.height(16.dp))
 
                 // ⚙️ Seção de conexão com a câmera térmica via BLE com funcionalidades específicas
@@ -329,9 +363,7 @@ fun SetupScreen(
                         isConnected = useBle,
                         onScan = { viewModel.startCamScan() },
                         onConnect = { viewModel.connectCam(it) },
-                        buttonColor = purpleButtonColor,
-                        buttonIcon = { CameraThermometerIcon() },
-                        wsViewModel = wsViewModel, // WebSocketViewModel para verificação do AP
+                        onDisconnect = { viewModel.disconnectCam() },
                         onAdvancedOptions = { ssid, password, device ->
                             android.util.Log.d("SetupScreen", "CALLBACK ACIONADO - Configurando WiFi: SSID=$ssid")
                             
@@ -346,7 +378,10 @@ fun SetupScreen(
                             } else {
                                 android.util.Log.e("SetupScreen", "BleManager não disponível!")
                             }
-                        }
+                        },
+                        buttonColor = purpleButtonColor,
+                        buttonIcon = { CameraThermometerIcon() },
+                        wsViewModel = wsViewModel
                     )
                 }
 
