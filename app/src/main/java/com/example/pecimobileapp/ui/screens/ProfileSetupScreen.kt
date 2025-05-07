@@ -26,7 +26,6 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
     val viewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(context))
 
     var anoNascimentoInput by remember { mutableStateOf(viewModel.anoNascimento?.toString() ?: "") }
-    var anoValido by remember { mutableStateOf(false) }
     var tentouValidar by remember { mutableStateOf(false) }
 
     val anoAtual = Calendar.getInstance().get(Calendar.YEAR)
@@ -80,37 +79,36 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                             value = anoNascimentoInput,
                             onValueChange = {
                                 anoNascimentoInput = it
-                                anoValido = false
                                 tentouValidar = false
                             },
                             label = { Text("Ano de Nascimento") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f),
-                            isError = tentouValidar && !anoValido
+                            isError = tentouValidar && viewModel.anoNascimento == null
                         )
 
                         Spacer(modifier = Modifier.width(8.dp))
 
                         if (tentouValidar) {
-                            if (anoValido) {
+                            if (!viewModel.isProfileIncomplete) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Ano válido",
+                                    contentDescription = "Perfil válido",
                                     tint = Color(0xFF4CAF50)
                                 )
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Error,
-                                    contentDescription = "Ano inválido",
+                                    contentDescription = "Perfil incompleto",
                                     tint = Color.Red
                                 )
                             }
                         }
                     }
 
-                    if (tentouValidar && !anoValido) {
+                    if (tentouValidar && viewModel.isProfileIncomplete) {
                         Text(
-                            text = "Ano inválido. Use um ano entre 1920 e $anoAtual.",
+                            text = "Preencha todos os campos obrigatórios corretamente.",
                             color = Color.Red,
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 4.dp)
@@ -123,12 +121,9 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                         onClick = {
                             val ano = anoNascimentoInput.toIntOrNull()
                             tentouValidar = true
-                            if (ano != null && ano in 1920..anoAtual) {
-                                viewModel.updateAnoNascimento(ano)
-                                anoValido = true
-                            } else {
-                                anoValido = false
-                            }
+                            viewModel.updateAnoNascimento(
+                                if (ano != null && ano in 1920..anoAtual) ano else null
+                            )
                         },
                         enabled = anoNascimentoInput.toIntOrNull() != null,
                         modifier = Modifier.align(Alignment.End)
@@ -158,7 +153,7 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                     viewModel.generateUserIdIfNeeded()
                     onSave()
                 },
-                enabled = anoValido,
+                enabled = !viewModel.isProfileIncomplete,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
                 Text("Salvar Perfil")

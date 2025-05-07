@@ -81,11 +81,24 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
         }
     }
 
+    fun clearProfile() {
+        viewModelScope.launch {
+            ProfilePreferences.clearAll(context)
+
+            // Limpa os estados locais também
+            nome = null
+            sobrenome = null
+            anoNascimento = null
+            fcMaxManual = null
+            userId = null
+
+        }
+    }
+
+
     // Função para gerar userId apenas se ainda não existir e perfil estiver preenchido
     fun generateUserIdIfNeeded() {
-        val perfilPreenchido = !nome.isNullOrBlank() && !sobrenome.isNullOrBlank() && anoNascimento != null
-
-        if (userId == null && perfilPreenchido) {
+        if (!isProfileIncomplete && userId == null) {
             val novoId = UUID.randomUUID().toString()
             userId = novoId
             viewModelScope.launch {
@@ -120,4 +133,13 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
                 "Zona 5" to (fc * 0.90).toInt()..fc
             )
         } ?: emptyList()
+
+    // Verificação de perfil incompleto
+    val isProfileIncomplete: Boolean
+        get() {
+            val anoAtual = Calendar.getInstance().get(Calendar.YEAR)
+            return nome.isNullOrBlank()
+                    || sobrenome.isNullOrBlank()
+                    || anoNascimento !in 1920..anoAtual
+        }
 }

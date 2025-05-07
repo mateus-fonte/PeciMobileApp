@@ -67,11 +67,18 @@ fun ProfileScreen(navToEdit: () -> Unit = {}) {
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = navToEdit,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                Text("Editar Perfil")
+                Button(onClick = navToEdit) {
+                    Text("Editar Perfil")
+                }
+
+                Button(onClick = { viewModel.clearProfile() }) {
+                    Text("Limpar Perfil")
+                }
             }
         }
     }

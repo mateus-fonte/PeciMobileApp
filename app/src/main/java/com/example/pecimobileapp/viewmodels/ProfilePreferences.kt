@@ -52,6 +52,11 @@ object ProfilePreferences {
         context.dataStore.edit { it[userIdKey] = id }
     }
 
+    suspend fun clearAll(context: Context) {
+        context.dataStore.edit { it.clear() }
+    }
+
+
     // 📤 Funções para ler
 
     fun nomeFlow(context: Context): Flow<String?> = context.dataStore.data.map {
