@@ -1,7 +1,7 @@
 package com.example.pecimobileapp.ui.screens
 
-import android.os.Build
-import androidx.annotation.RequiresApi
+//import android.os.Build
+//import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -34,7 +34,7 @@ val zoneColors = mapOf(
     6 to Color(0xFF9E9E9E)
 )
 
-@RequiresApi(Build.VERSION_CODES.O)
+//@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun WorkoutScreen(
     navController: androidx.navigation.NavController,

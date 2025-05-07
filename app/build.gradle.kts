@@ -76,6 +76,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.datastore:datastore-preferences:1.1.0")
+    implementation("androidx.preference:preference-ktx:1.2.1") // Adicionando dependência androidx.preference
 
     // Compose
     implementation(platform("androidx.compose:compose-bom:2024.01.00"))
