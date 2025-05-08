@@ -13,22 +13,32 @@ object ProfilePreferences {
 
     // 🔑 Chaves
     val nomeKey = stringPreferencesKey("nome")
-    val identificadorKey = stringPreferencesKey("identificador")
+    val sobrenomeKey = stringPreferencesKey("sobrenome")
     val anoNascimentoKey = intPreferencesKey("ano_nascimento")
     val fcMaxManualKey = intPreferencesKey("fc_max_manual")
+    val userIdKey = stringPreferencesKey("user_id") // Novo campo
 
     // 💾 Funções para gravar
 
-    suspend fun saveNome(context: Context, nome: String) {
-        context.dataStore.edit { it[nomeKey] = nome }
+    suspend fun saveNome(context: Context, nome: String?) {
+        context.dataStore.edit {
+            if (!nome.isNullOrBlank()) it[nomeKey] = nome
+            else it.remove(nomeKey)
+        }
     }
 
-    suspend fun saveIdentificador(context: Context, identificador: String) {
-        context.dataStore.edit { it[identificadorKey] = identificador }
+    suspend fun saveSobrenome(context: Context, sobrenome: String?) {
+        context.dataStore.edit {
+            if (!sobrenome.isNullOrBlank()) it[sobrenomeKey] = sobrenome
+            else it.remove(sobrenomeKey)
+        }
     }
 
-    suspend fun saveAnoNascimento(context: Context, ano: Int) {
-        context.dataStore.edit { it[anoNascimentoKey] = ano }
+    suspend fun saveAnoNascimento(context: Context, ano: Int?) {
+        context.dataStore.edit {
+            if (ano != null) it[anoNascimentoKey] = ano
+            else it.remove(anoNascimentoKey)
+        }
     }
 
     suspend fun saveFcMaxManual(context: Context, fcMaxManual: Int?) {
@@ -38,21 +48,34 @@ object ProfilePreferences {
         }
     }
 
+    suspend fun saveUserId(context: Context, id: String) {
+        context.dataStore.edit { it[userIdKey] = id }
+    }
+
+    suspend fun clearAll(context: Context) {
+        context.dataStore.edit { it.clear() }
+    }
+
+
     // 📤 Funções para ler
 
-    fun nomeFlow(context: Context): Flow<String> = context.dataStore.data.map {
-        it[nomeKey] ?: "Maria"
+    fun nomeFlow(context: Context): Flow<String?> = context.dataStore.data.map {
+        it[nomeKey]
     }
 
-    fun identificadorFlow(context: Context): Flow<String> = context.dataStore.data.map {
-        it[identificadorKey] ?: "Sabinada"
+    fun sobrenomeFlow(context: Context): Flow<String?> = context.dataStore.data.map {
+        it[sobrenomeKey]
     }
 
-    fun anoNascimentoFlow(context: Context): Flow<Int> = context.dataStore.data.map {
-        it[anoNascimentoKey] ?: 1992
+    fun anoNascimentoFlow(context: Context): Flow<Int?> = context.dataStore.data.map {
+        it[anoNascimentoKey]
     }
 
     fun fcMaxManualFlow(context: Context): Flow<Int?> = context.dataStore.data.map {
         it[fcMaxManualKey]
+    }
+
+    fun userIdFlow(context: Context): Flow<String?> = context.dataStore.data.map {
+        it[userIdKey]
     }
 }
