@@ -1,5 +1,6 @@
 package com.example.pecimobileapp.ui.navigation
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -73,7 +74,6 @@ fun BottomNavScaffold(
                         )
                     )
 
-                    // Espaço vazio para centralizar o FAB
                     Spacer(modifier = Modifier.weight(1f, true))
 
                     NavigationBarItem(
@@ -90,7 +90,6 @@ fun BottomNavScaffold(
                     )
                 }
 
-                // Botão central Home com FAB (sobrescrito corretamente)
                 FloatingActionButton(
                     onClick = {
                         navController.navigate("main") {
@@ -125,9 +124,15 @@ fun BottomNavScaffold(
                 startDestination = "main",
                 modifier = Modifier.fillMaxSize()
             ) {
-                composable("setup") { SetupScreen(vm, navController, webSocketViewModel) }
-                composable("main") { MainScreen(vm, webSocketViewModel,navController) }
-                composable("websocket") { WebSocketScreen(webSocketViewModel) }
+                composable("setup") {
+                    SetupScreen(vm, navController, webSocketViewModel)
+                }
+                composable("main") {
+                    MainScreen(vm, webSocketViewModel, navController)
+                }
+                composable("websocket") {
+                    WebSocketScreen(webSocketViewModel)
+                }
                 composable("historico") {
                     HistoricoScreen(onBackClick = { navController.popBackStack() })
                 }
@@ -144,49 +149,46 @@ fun BottomNavScaffold(
                 composable("define_workout") {
                     DefineWorkoutScreen(navController)
                 }
-                composable(
-                    route = "workout/{zone}?group={group}",
-                    arguments = listOf(
-                        navArgument("zone") { type = NavType.IntType },
-                        navArgument("group") { type = NavType.StringType; defaultValue = "false" }
-                    )
-                ) { backStackEntry ->
-                    val zone = backStackEntry.arguments?.getInt("zone") ?: 1
-                    val groupParam = backStackEntry.arguments?.getString("group")
-                    val isGroup = groupParam != "false"
-                    val groupName = if (isGroup) groupParam else null
-
-                    val mqttManager = if (isGroup) MqttManager else null
-
-                    WorkoutScreen(
-                        navController = navController,
-                        selectedZone = zone,
-                        isGroup = isGroup,
-                        mqttManager = mqttManager,
-                        groupName = groupName,
-                        onStop = { navController.popBackStack() },
-                        realTimeViewModel = vm
-                    )
-                }
-                composable(
-                    route = "countdown?zone={zone}&group={group}",
-                    arguments = listOf(
-                        navArgument("zone") { type = NavType.IntType; defaultValue = 1 },
-                        navArgument("group") { type = NavType.StringType; defaultValue = "false" }
-                    )
-                ) { backStackEntry ->
-                    val zone = backStackEntry.arguments?.getInt("zone") ?: 1
-                    val group = backStackEntry.arguments?.getString("group") ?: "false"
+                composable("countdown") { backStackEntry ->
+                    val selectedZone = backStackEntry.savedStateHandle.get<Int>("selectedZone") ?: 1
+                    val groupId = backStackEntry.savedStateHandle.get<String?>("groupId")
 
                     CountdownScreen(
                         navController = navController,
+                        viewModel = vm,
                         onCountdownFinished = {
-                            navController.navigate("workout/$zone?group=$group") {
-                                popUpTo("countdown") { inclusive = true }
-                            }
+                            navController.currentBackStackEntry?.savedStateHandle?.set("selectedZone", selectedZone)
+                            navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
+                            navController.navigate("workout")
                         }
                     )
                 }
+                composable(
+    route = "workout?selectedZone={selectedZone}&groupId={groupId}&userId={userId}",
+    arguments = listOf(
+        navArgument("selectedZone") { type = NavType.IntType; defaultValue = 1 },
+        navArgument("groupId") { type = NavType.StringType; nullable = true },
+        navArgument("userId") { type = NavType.StringType; defaultValue = "default_user" }
+    )
+) { backStackEntry ->
+    // Get parameters from route arguments instead of savedStateHandle
+    val selectedZone = backStackEntry.arguments?.getInt("selectedZone") ?: 1
+    val groupId = backStackEntry.arguments?.getString("groupId")?.takeIf { it.isNotEmpty() }
+    val userId = backStackEntry.arguments?.getString("userId") ?: "default_user"
+    
+    // Log to verify we got the parameters
+    Log.d("BottomNavScaffold", "WorkoutScreen getting params - zone: $selectedZone, groupId: $groupId, userId: $userId")
+    
+    WorkoutScreen(
+        navController = navController,
+        onStop = { navController.popBackStack() },
+        realTimeViewModel = vm,
+        // Pass parameters explicitly
+        selectedZone = selectedZone,
+        groupId = groupId,
+        userId = userId
+    )
+}
             }
         }
     }

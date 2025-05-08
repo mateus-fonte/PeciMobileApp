@@ -6,6 +6,9 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import com.hivemq.client.mqtt.MqttClient
 import com.hivemq.client.mqtt.datatypes.MqttQos
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.time.Instant
@@ -34,8 +37,13 @@ object MqttManager {
         connect()
     }
 
-    fun connect() {
-        if (!isConnected) {
+    @Volatile
+private var isConnecting = false
+
+fun connect() {
+    if (!isConnected && !isConnecting) {
+        isConnecting = true
+        CoroutineScope(Dispatchers.IO).launch {
             try {
                 mqttClient.connect()
                 isConnected = true
@@ -43,11 +51,18 @@ object MqttManager {
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao conectar ao MQTT Broker", e)
                 isConnected = false
+            } finally {
+                isConnecting = false
             }
         }
     }
+}
 
-    fun publish(topic: String, message: String) {
+fun publish(topic: String, message: String) {
+    if (!isConnected && !isConnecting) {
+        connect() // Tenta reconectar automaticamente
+    }
+    if (isConnected) {
         try {
             mqttClient.publishWith()
                 .topic(topic)
@@ -58,38 +73,52 @@ object MqttManager {
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao publicar em $topic", e)
         }
+    } else {
+        Log.e(TAG, "Não foi possível publicar: MQTT não conectado")
     }
+}
 
-    fun subscribe(topic: String, onMessageReceived: (String) -> Unit) {
-        try {
-            mqttClient.toAsync().subscribeWith()
-                .topicFilter(topic)
-                .qos(MqttQos.AT_LEAST_ONCE)
-                .callback { publish ->
-                    val payload = publish.payload.orElse(null)?.let {
-                        String(it.array(), StandardCharsets.UTF_8)
+fun subscribe(topic: String, onMessageReceived: (String) -> Unit) {
+    try {
+        // Make sure we're connected
+        if (!isConnected) connect()
+        
+        // Proper HiveMQ MQTT client subscription pattern
+        mqttClient.toAsync().subscribeWith()
+            .topicFilter(topic)
+            .callback { publish ->
+                try {
+                    // Get the ByteBuffer safely
+                    val byteBuffer = publish.getPayloadAsBytes()
+                    if (byteBuffer != null) {
+                        // Convert byte array to String
+                        val message = String(byteBuffer, StandardCharsets.UTF_8)
+                        onMessageReceived(message)
                     }
-                    if (payload != null) {
-                        onMessageReceived(payload)
-                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing MQTT message", e)
                 }
-                .send()
-            Log.d(TAG, "Subscrito ao tópico: $topic")
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao subscrever ao tópico $topic", e)
-        }
+            }
+            .send()
+        Log.d(TAG, "Subscrito ao tópico: $topic")
+    } catch (e: Exception) {
+        Log.e(TAG, "Erro ao subscrever ao tópico $topic", e)
     }
+}
 
     @RequiresApi(Build.VERSION_CODES.O)
-    fun publishSensorData(
-        groupId: String,
-        userId: String,
-        exerciseId: String,
-        source: String,
-        value: Number,
-        selectedZone: Int,
-        zonas: List<Pair<String, IntRange>>
-    ) {
+fun publishSensorData(
+    groupId: String,
+    userId: String,
+    exerciseId: String,
+    source: String,
+    value: Number,
+    selectedZone: Int,
+    zonas: List<Pair<String, IntRange>>
+) {
+    CoroutineScope(Dispatchers.IO).launch {
+        Log.d("MqttManager", "Publishing data -> groupId: $groupId, userId: $userId, exerciseId: $exerciseId, source: $source, value: $value, selectedZone: $selectedZone")
+
         connect()
         val timestamp = Instant.now().toEpochMilli()
 
@@ -98,20 +127,7 @@ object MqttManager {
             put("exercise_id", exerciseId)
             put("user_uid", userId)
             put("source", source)
-            put("value", value.toDouble())  // <-- Corrigido aqui
-            put("timestamp", timestamp)
-        }
-
-        val currentZone = WorkoutSessionManager.calculateCurrentZone(value.toInt(), zonas)
-        WorkoutSessionManager.incrementTime(source, currentZone, selectedZone)
-
-        val rating = WorkoutSessionManager.getExecutionPercentage()
-
-        val ratingPayload = JSONObject().apply {
-            put("group_id", groupId)
-            put("exercise_id", exerciseId)
-            put("user_uid", userId)
-            put("rating", rating.toDouble())  // <-- Corrigido aqui
+            put("value", value.toDouble())
             put("timestamp", timestamp)
         }
 
@@ -120,11 +136,12 @@ object MqttManager {
 
         try {
             publish(topicUser, sensorPayload.toString())
-            publish(topicGroup, ratingPayload.toString())
+            publish(topicGroup, sensorPayload.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao publicar MQTT", e)
         }
     }
+}
 
     @RequiresApi(Build.VERSION_CODES.O)
     object WorkoutSessionManager {

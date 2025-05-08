@@ -77,6 +77,8 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private var retryCount = 0
     private val maxRetries = 3
     private val retryDelayMs = 5000L
+    private var activityStarted = false
+
 
     // Adicionando variáveis para verificação periódica de conexão
     private val connectionCheckHandler = Handler(Looper.getMainLooper())
@@ -105,12 +107,23 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         selectedZone: Int,
         zonasList: List<Pair<String, IntRange>>
     ) {
-        this.groupId = group ?: "false"
+        this.groupId = group ?: "individual"
         this.userId = user
         this.exerciseId = exercise
         this.selectedZone = selectedZone
         this.zonas = zonasList
     }
+
+    fun startActivity() {
+        activityStarted = true
+        Log.d(TAG, "Atividade iniciada: envio de dados via MQTT liberado")
+    }
+
+    fun stopActivity() {
+        activityStarted = false
+        Log.d(TAG, "Atividade encerrada: envio de dados via MQTT bloqueado")
+    }
+
 
     @SuppressLint("MissingPermission")
     fun startScan() {
@@ -164,6 +177,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             } else {
                 _connectionLost.value = true
                 stopConnectionCheck()
+                Log.e(TAG, "Falha ao reconectar após $maxRetries tentativas")
             }
         }
     }
@@ -183,14 +197,13 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         connectionCheckHandler.removeCallbacks(connectionCheckRunnable)
     }
 
-    // Verificar se a conexão está ativa
     private fun checkConnection() {
         if (!_connected.value) return
-
+    
         val timeSinceLastCommunication = System.currentTimeMillis() - lastCommunicationTime
         if (timeSinceLastCommunication > connectionTimeout) {
-            Log.d(TAG, "Conexão parece estar inativa por $timeSinceLastCommunication ms. Considerando como desconectada.")
-            handleConnectionLost()
+            Log.d(TAG, "Conexão parece estar inativa por $timeSinceLastCommunication ms. Tentando reconectar...")
+            attemptReconnect() // Tenta reconectar antes de considerar desconectado
         }
     }
 
@@ -257,8 +270,12 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
         val raw = String(characteristic.value, Charsets.UTF_8)
-
         updateLastCommunicationTime()
+
+        if (!activityStarted) {
+            Log.d(TAG, "Dados recebidos, mas atividade ainda não começou. Ignorando envio MQTT.")
+            return
+        }
 
         when (characteristic.uuid) {
             HR_CHAR_UUID -> {
@@ -285,6 +302,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             }
         }
     }
+
 
     private fun writeNextConfig() {
         val (uuid, data) = writeQueue.firstOrNull() ?: run {
