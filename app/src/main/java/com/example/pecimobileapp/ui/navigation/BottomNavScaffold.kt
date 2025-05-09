@@ -1,8 +1,6 @@
 package com.example.pecimobileapp.ui.navigation
 
 import android.util.Log
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -18,7 +16,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
-import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
@@ -35,17 +32,27 @@ fun BottomNavScaffold(
     val currentRoute = navBackStackEntry?.destination?.route
     val vm: RealTimeViewModel = viewModel()
 
+    var showLeaveWorkoutDialog by remember { mutableStateOf(false) }
+    var pendingNavigationRoute by remember { mutableStateOf<String?>(null) }
+
+    val isInWorkout = currentRoute?.startsWith("workout") == true
+
+    fun handleNavigation(destination: String) {
+        if (isInWorkout) {
+            showLeaveWorkoutDialog = true
+            pendingNavigationRoute = destination
+        } else {
+            navController.navigate(destination)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("The Heart Box", color = Color.White) },
                 actions = {
-                    IconButton(onClick = { navController.navigate("profile") }) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Perfil",
-                            tint = Color.White
-                        )
+                    IconButton(onClick = { handleNavigation("profile") }) {
+                        Icon(Icons.Default.Person, contentDescription = "Perfil", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.smallTopAppBarColors(containerColor = Color(0xFF8A2BE2))
@@ -57,15 +64,13 @@ fun BottomNavScaffold(
             Box {
                 NavigationBar(
                     containerColor = Color(0xFF8A2BE2),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
+                    modifier = Modifier.fillMaxWidth().height(56.dp)
                 ) {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Settings, contentDescription = "Setup") },
                         label = { Text("Setup") },
                         selected = currentRoute == "setup",
-                        onClick = { navController.navigate("setup") },
+                        onClick = { handleNavigation("setup") },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = Color.White,
                             unselectedIconColor = Color.LightGray,
@@ -80,7 +85,7 @@ fun BottomNavScaffold(
                         icon = { Icon(Icons.Default.Star, contentDescription = "Histórico") },
                         label = { Text("Histórico") },
                         selected = currentRoute == "historico",
-                        onClick = { navController.navigate("historico") },
+                        onClick = { handleNavigation("historico") },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = Color.White,
                             unselectedIconColor = Color.LightGray,
@@ -92,8 +97,13 @@ fun BottomNavScaffold(
 
                 FloatingActionButton(
                     onClick = {
-                        navController.navigate("main") {
-                            popUpTo("main") { inclusive = true }
+                        if (isInWorkout) {
+                            showLeaveWorkoutDialog = true
+                            pendingNavigationRoute = "main"
+                        } else {
+                            navController.navigate("main") {
+                                popUpTo("main") { inclusive = true }
+                            }
                         }
                     },
                     containerColor = if (isMainSelected) Color.White else Color(0xFF8A2BE2),
@@ -104,15 +114,10 @@ fun BottomNavScaffold(
                         .offset(y = (-24).dp)
                         .zIndex(1f)
                 ) {
-                    Icon(
-                        Icons.Default.Home,
-                        contentDescription = "Home",
-                        modifier = Modifier.size(32.dp)
-                    )
+                    Icon(Icons.Default.Home, contentDescription = "Home", modifier = Modifier.size(32.dp))
                 }
             }
         }
-
     ) { innerPadding ->
         Box(
             Modifier
@@ -149,46 +154,75 @@ fun BottomNavScaffold(
                 composable("define_workout") {
                     DefineWorkoutScreen(navController)
                 }
-                composable("countdown") { backStackEntry ->
-                    val selectedZone = backStackEntry.savedStateHandle.get<Int>("selectedZone") ?: 1
-                    val groupId = backStackEntry.savedStateHandle.get<String?>("groupId")
-
+                composable("countdown") {
                     CountdownScreen(
                         navController = navController,
                         viewModel = vm,
                         onCountdownFinished = {
-                            navController.currentBackStackEntry?.savedStateHandle?.set("selectedZone", selectedZone)
-                            navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupId)
-                            navController.navigate("workout")
+                            // handled inside countdown
                         }
                     )
                 }
                 composable(
-    route = "workout?selectedZone={selectedZone}&groupId={groupId}&userId={userId}",
-    arguments = listOf(
-        navArgument("selectedZone") { type = NavType.IntType; defaultValue = 1 },
-        navArgument("groupId") { type = NavType.StringType; nullable = true },
-        navArgument("userId") { type = NavType.StringType; defaultValue = "default_user" }
-    )
-) { backStackEntry ->
-    // Get parameters from route arguments instead of savedStateHandle
-    val selectedZone = backStackEntry.arguments?.getInt("selectedZone") ?: 1
-    val groupId = backStackEntry.arguments?.getString("groupId")?.takeIf { it.isNotEmpty() }
-    val userId = backStackEntry.arguments?.getString("userId") ?: "default_user"
-    
-    // Log to verify we got the parameters
-    Log.d("BottomNavScaffold", "WorkoutScreen getting params - zone: $selectedZone, groupId: $groupId, userId: $userId")
-    
-    WorkoutScreen(
-        navController = navController,
-        onStop = { navController.popBackStack() },
-        realTimeViewModel = vm,
-        // Pass parameters explicitly
-        selectedZone = selectedZone,
-        groupId = groupId,
-        userId = userId
-    )
-}
+                    route = "workout?selectedZone={selectedZone}&groupId={groupId}&userId={userId}&exerciseId={exerciseId}",
+                    arguments = listOf(
+                        navArgument("selectedZone") { type = NavType.IntType; defaultValue = 1 },
+                        navArgument("groupId") { type = NavType.StringType; nullable = true },
+                        navArgument("userId") { type = NavType.StringType; defaultValue = "default_user" },
+                        navArgument("exerciseId") { type = NavType.StringType; defaultValue = "ex-teste" }
+                    )
+                ) { backStackEntry ->
+                    val selectedZone = backStackEntry.arguments?.getInt("selectedZone") ?: 1
+                    val groupId = backStackEntry.arguments?.getString("groupId")?.takeIf { it.isNotEmpty() }
+                    val userId = backStackEntry.arguments?.getString("userId") ?: "default_user"
+                    val exerciseId = backStackEntry.arguments?.getString("exerciseId") ?: "ex-teste"
+
+                    Log.d("BottomNavScaffold", "WorkoutScreen args: zone=$selectedZone, group=$groupId, user=$userId, exercise=$exerciseId")
+
+                    WorkoutScreen(
+                        navController = navController,
+                        selectedZone = selectedZone,
+                        groupId = groupId,
+                        userId = userId,
+                        exerciseId = exerciseId,
+                        realTimeViewModel = vm,
+                        onStop = { navController.popBackStack() }
+                    )
+                }
+            }
+
+            // AlertDialog para confirmação ao sair da WorkoutScreen
+            if (showLeaveWorkoutDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showLeaveWorkoutDialog = false
+                        pendingNavigationRoute = null
+                    },
+                    title = { Text("Sair do Treino") },
+                    text = { Text("Ao sair da tela de treino, o envio de dados será interrompido. Deseja continuar?") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showLeaveWorkoutDialog = false
+                            pendingNavigationRoute?.let {
+                                vm.stopActivity() // <-- encerra corretamente o treino
+                                navController.navigate(it) {
+                                    popUpTo("main") { inclusive = false }
+                                }
+                            }
+                            pendingNavigationRoute = null
+                        }) {
+                            Text("Sim")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showLeaveWorkoutDialog = false
+                            pendingNavigationRoute = null
+                        }) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
             }
         }
     }
