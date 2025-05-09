@@ -51,8 +51,13 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                     // Campo Nome
                     OutlinedTextField(
                         value = viewModel.nome ?: "",
-                        onValueChange = { viewModel.updateNome(it.ifBlank { null }) },
+                        onValueChange = {
+                            val cleaned = it.filterNot { c -> c.isWhitespace() }
+                            viewModel.updateNome(cleaned.ifBlank { null })
+                        },
                         label = { Text("Nome") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -62,15 +67,18 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                     OutlinedTextField(
                         value = viewModel.sobrenome ?: "",
                         onValueChange = {
-                            if (it.length <= 20) viewModel.updateSobrenome(it.ifBlank { null })
+                            val cleaned = it.filterNot { c -> c.isWhitespace() }.take(20)
+                            viewModel.updateSobrenome(cleaned.ifBlank { null })
                         },
-                        label = { Text("Sobrenome (máx. 20 caracteres)") },
+                        label = { Text("Sobrenome") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Campo Ano de Nascimento com feedback
+                    // Campo Ano de Nascimento com validação automática
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
@@ -79,7 +87,11 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                             value = anoNascimentoInput,
                             onValueChange = {
                                 anoNascimentoInput = it
-                                tentouValidar = false
+                                tentouValidar = true // já tenta validar assim que digita
+                                val ano = it.toIntOrNull()
+                                viewModel.updateAnoNascimento(
+                                    if (ano != null && ano in 1920..anoAtual) ano else null
+                                )
                             },
                             label = { Text("Ano de Nascimento") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -94,7 +106,7 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Perfil válido",
-                                    tint = Color(0xFF4CAF50)
+                                    tint = Color(0xFF4CAF50) // verde
                                 )
                             } else {
                                 Icon(
@@ -104,31 +116,6 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                                 )
                             }
                         }
-                    }
-
-                    if (tentouValidar && viewModel.isProfileIncomplete) {
-                        Text(
-                            text = "Preencha todos os campos obrigatórios corretamente.",
-                            color = Color.Red,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Button(
-                        onClick = {
-                            val ano = anoNascimentoInput.toIntOrNull()
-                            tentouValidar = true
-                            viewModel.updateAnoNascimento(
-                                if (ano != null && ano in 1920..anoAtual) ano else null
-                            )
-                        },
-                        enabled = anoNascimentoInput.toIntOrNull() != null,
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("Validar Ano")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))

@@ -20,34 +20,39 @@ fun CountdownScreen(
     onCountdownFinished: () -> Unit = {}
 ) {
     var counter by remember { mutableStateOf(3) }
-    
-    // Read parameters once
-    val selectedZone = remember { 
-        navController.previousBackStackEntry?.savedStateHandle?.get<Int>("selectedZone") ?: 1 
+
+    val selectedZone = remember {
+        navController.previousBackStackEntry?.savedStateHandle?.get<Int>("selectedZone") ?: 1
     }
-    val groupId = remember { 
-        navController.previousBackStackEntry?.savedStateHandle?.get<String?>("groupId") 
+    val groupId = remember {
+        navController.previousBackStackEntry?.savedStateHandle?.get<String?>("groupId")
     }
-    val userId = remember { 
-        navController.previousBackStackEntry?.savedStateHandle?.get<String>("userId") ?: "default_user" 
+    val userId = remember {
+        navController.previousBackStackEntry?.savedStateHandle?.get<String>("userId") ?: "default_user"
     }
-    
-    // Log parameters at start
+
+    // ✅ Gerar novo exerciseId aqui
+    val exerciseId = remember {
+        "ex-${System.currentTimeMillis()}"
+    }
+
+    // Log para debug
     LaunchedEffect(Unit) {
-        Log.d("CountdownScreen", "Starting countdown with params - selectedZone: $selectedZone, groupId: $groupId, userId: $userId")
-        
-        // Countdown
+        Log.d("CountdownScreen", "Starting countdown with params - selectedZone: $selectedZone, groupId: $groupId, userId: $userId, exerciseId: $exerciseId")
+
+        // Contagem regressiva
         while (counter > 0) {
             delay(1000)
             counter--
         }
-        
-        delay(500) // Small pause at 0
-        
-        // Use arguments when navigating to pass the parameters
-        navController.navigate("workout?selectedZone=$selectedZone&groupId=${groupId ?: ""}&userId=$userId")
+
+        delay(500) // pequena pausa visual
+
+        // ✅ Navegar passando todos os parâmetros
+        navController.navigate("workout?selectedZone=$selectedZone&groupId=${groupId ?: ""}&userId=$userId&exerciseId=$exerciseId")
     }
 
+    // UI da contagem
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background

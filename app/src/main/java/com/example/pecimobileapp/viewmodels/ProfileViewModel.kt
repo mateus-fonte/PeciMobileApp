@@ -17,10 +17,22 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
     var sobrenome by mutableStateOf<String?>(null)
     var anoNascimento by mutableStateOf<Int?>(null)
     var fcMaxManual by mutableStateOf<Int?>(null)
+    //var userId by mutableStateOf<String?>(null)
+
     var userId by mutableStateOf<String?>(null)
+        private set
+
+    private fun loadUserId() {
+        launchSafely {
+            ProfilePreferences.userIdFlow(context).collectLatest {
+                userId = it
+            }
+        }
+    }
 
     init {
         loadProfile()
+        loadUserId()
     }
 
     // Função auxiliar para tratar exceções nos Flow
