@@ -1,7 +1,6 @@
 package com.example.pecimobileapp.ui.screens
 
-//import android.os.Build
-//import androidx.annotation.RequiresApi
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,11 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
 import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.take
 import org.json.JSONObject
 
 val zoneColors = mapOf(
@@ -34,34 +32,31 @@ val zoneColors = mapOf(
     6 to Color(0xFF9E9E9E)
 )
 
-//@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun WorkoutScreen(
-    navController: androidx.navigation.NavController,
-    selectedZone: Int,
-    isGroup: Boolean,
-    mqttManager: MqttManager?,
-    groupName: String?,
+    navController: NavController,
     onStop: () -> Unit,
-    realTimeViewModel: RealTimeViewModel
+    realTimeViewModel: RealTimeViewModel,
+    selectedZone: Int,
+    groupId: String?,
+    userId: String
 ) {
-    val zonasState by realTimeViewModel.zonas.collectAsState()
-    val userId by realTimeViewModel.userId.collectAsState()
-
-    LaunchedEffect(selectedZone, zonasState, groupName, userId) {
-        if (zonasState.isNotEmpty() && userId.isNotEmpty()) {
-            realTimeViewModel.setWorkoutParameters(
-                zone = selectedZone,
-                zonasList = zonasState,
-                group = groupName,
-                user = userId,
-                exercise = "session-${System.currentTimeMillis()}"
-            )
-        }
+    // No need to get params from navController now, we receive them directly
+    val isGroup = groupId != null
+    val groupName = groupId
+    
+    LaunchedEffect(Unit) {
+        Log.d("WorkoutScreen", "Setting workout parameters - selectedZone: $selectedZone, groupName: $groupName, userId: $userId")
+        
+        realTimeViewModel.setWorkoutParameters(
+            zone = selectedZone,
+            zonasList = realTimeViewModel.zonas.value,
+            group = groupName,
+            user = userId,
+            exercise = "session-${System.currentTimeMillis()}"
+        )
+        realTimeViewModel.startActivity()
     }
-
-
-
 
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
     val avgTemp by realTimeViewModel.avgTemp.collectAsState()
@@ -78,34 +73,54 @@ fun WorkoutScreen(
 
     val scrollState = rememberScrollState()
 
-    // 📡 Subscrição para ranking via MQTT
     LaunchedEffect(groupName) {
-        if (groupName != null && mqttManager != null) {
-            mqttManager.subscribe("/group/$groupName/data") { raw ->
-                try {
-                    val json = JSONObject(raw)
-                    if (json.has("rating")) {
-                        val uid = json.getString("user_uid")
-                        val rating = json.getDouble("rating").toFloat()
-                        ratingsMap[uid] = rating
-
-                        val sorted = ratingsMap.entries
-                            .sortedByDescending { it.value }
-                            .map { it.key }
-
-                        myPosition = sorted.indexOf(userId) + 1
+        if (groupName != null) {
+            try {
+                MqttManager.subscribe("/group/$groupName/data") { rawMessage ->
+                    try {
+                        val jsonObj = JSONObject(rawMessage)
+                        if (jsonObj.has("rating")) {
+                            val uid = jsonObj.getString("user_uid")
+                            val rating = jsonObj.getDouble("rating").toFloat()
+                            ratingsMap[uid] = rating
+    
+                            val sorted = ratingsMap.entries
+                                .sortedByDescending { it.value }
+                                .map { it.key }
+    
+                            myPosition = sorted.indexOf(userId) + 1
+                        }
+                    } catch (e: Exception) {
+                        Log.e("WorkoutScreen", "Error parsing JSON", e)
                     }
-                } catch (_: Exception) {}
+                }
+            } catch (e: Exception) {
+                Log.e("WorkoutScreen", "Error subscribing to MQTT topic", e)
             }
         }
     }
 
-    // ⏱️ Atualização contínua da execução
     LaunchedEffect(isRunning) {
-        MqttManager.WorkoutSessionManager.resetSession()
-        while (isRunning) {
-            delay(1000L)
-            executionPct = MqttManager.WorkoutSessionManager.getExecutionPercentage()
+        if (isRunning) {
+            MqttManager.WorkoutSessionManager.resetSession()
+            while (isRunning) {
+                delay(1000L)
+                executionPct = MqttManager.WorkoutSessionManager.getExecutionPercentage()
+            }
+        }
+    }
+
+    val ppgLost by realTimeViewModel.ppgConnectionLost.collectAsState()
+    val camLost by realTimeViewModel.camConnectionLost.collectAsState()
+
+    LaunchedEffect(ppgLost, camLost) {
+        if (ppgLost) {
+            Log.e("WorkoutScreen", "Conexão com o sensor de PPG perdida")
+            isRunning = false
+        }
+        if (camLost) {
+            Log.e("WorkoutScreen", "Conexão com a câmera térmica perdida")
+            isRunning = false
         }
     }
 
@@ -119,7 +134,6 @@ fun WorkoutScreen(
                 .verticalScroll(scrollState)
                 .padding(8.dp)
         ) {
-            // 🎮 Botões de controle
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -134,7 +148,7 @@ fun WorkoutScreen(
                     }
                     IconButton(onClick = {
                         isRunning = false
-                        onStop() // <- Navegação é controlada de fora
+                        onStop()
                     }) {
                         Icon(Icons.Default.Stop, contentDescription = "Parar")
                     }

@@ -1,5 +1,6 @@
 package com.example.pecimobileapp.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +20,7 @@ import androidx.navigation.NavController
 import com.example.pecimobileapp.ui.ProfileViewModel
 import com.example.pecimobileapp.viewmodels.ProfileViewModelFactory
 import com.example.pecimobileapp.ui.theme.*
+import java.util.*
 
 fun encodeBase62(number: Long): String {
     val chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -193,16 +195,23 @@ fun DefineWorkoutScreen(navController: NavController) {
             "criar", "entrar" -> groupFullName.isNotEmpty()
             else -> false
         }
-
         Button(
-            onClick = {
-                val groupParam = if (workoutMode == "individual") "false" else groupFullName
-                navController.navigate("countdown?zone=$selectedZone&group=$groupParam")
-            },
-            enabled = canStart,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Iniciar treino")
-        }
+    onClick = {
+        val groupParam = if (workoutMode == "individual") null else groupFullName
+        val userId = profileViewModel.userId ?: "default_user"
+
+        Log.d("DefineWorkoutScreen", "selectedZone: $selectedZone, groupId: $groupParam, userId: $userId")
+
+        navController.currentBackStackEntry?.savedStateHandle?.set("selectedZone", selectedZone)
+        navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupParam)
+        navController.currentBackStackEntry?.savedStateHandle?.set("userId", userId)
+
+        navController.navigate("countdown")
+    },
+    enabled = canStart,
+    modifier = Modifier.fillMaxWidth()
+) {
+    Text("Iniciar treino")
+}
     }
 }

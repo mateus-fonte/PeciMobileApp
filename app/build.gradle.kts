@@ -94,6 +94,8 @@ dependencies {
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
+    implementation("org.slf4j:slf4j-android:1.7.36")
+
     // MQTT
     implementation("com.hivemq:hivemq-mqtt-client:1.3.0")
     implementation("org.eclipse.paho:org.eclipse.paho.android.service:1.1.1")
