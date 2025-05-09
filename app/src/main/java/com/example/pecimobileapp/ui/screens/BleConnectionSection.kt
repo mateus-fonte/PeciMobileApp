@@ -408,13 +408,13 @@ fun ThermalCameraBleSection(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                         }
-                        Text("Configurar Câmera via WiFi")
+                        Text("Configurar Câmera")
                     }
                     
                     // Texto explicativo sobre o processo
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Ao clicar em \"Configurar Câmera via WiFi\", a câmera será configurada para se conectar ao hotspot do seu celular e enviar imagens por WiFi, permitindo a visualização em tempo real.",
+                        text = "Ao clicar em \"Configurar Câmera\", a câmera será configurada para se conectar ao hotspot do seu celular e enviar imagens por WiFi, permitindo a visualização em tempo real.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp)
