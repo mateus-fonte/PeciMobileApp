@@ -90,7 +90,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         }
     }
     private var lastCommunicationTime = System.currentTimeMillis()
-    private val connectionTimeout = 10000L // 10 segundos
+    private val connectionTimeout = 600000L // 10 minutos
     private var connectionCheckActive = false
 
     // Sessão atual
