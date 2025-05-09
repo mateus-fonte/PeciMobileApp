@@ -38,6 +38,8 @@ fun SimpleBleConnectionSection(
     buttonColor: Color = MaterialTheme.colorScheme.primary, // Cor personalizada para o botão
     buttonIcon: @Composable () -> Unit = {} // Ícone personalizado para o botão
 ) {
+    var connectedDeviceName by remember { mutableStateOf("") }
+
     // Filtrar apenas dispositivos com nomes na lista permitida
     val filteredResults = scanResults.filter { result ->
         val deviceName = result.device.name ?: ""
@@ -61,13 +63,16 @@ fun SimpleBleConnectionSection(
                     // Adicionar o ícone personalizado para o botão de escaneamento
                     buttonIcon()
                     Spacer(Modifier.width(8.dp))
-                    Text("Escanear $title")
+                    Text("Escanear Smartwatch")
                 }
             }
             Spacer(Modifier.height(8.dp))
             filteredResults.forEach { result ->
                 Button(
-                    onClick = { onConnect(result.device) },
+                    onClick = { 
+                        onConnect(result.device)
+                        connectedDeviceName = result.device.name ?: result.device.address
+                    },
                     Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
@@ -97,7 +102,7 @@ fun SimpleBleConnectionSection(
                     containerColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("Desconectar $title")
+                Text("Desconectar ${connectedDeviceName}")
             }
         }
     }
@@ -122,6 +127,7 @@ fun ThermalCameraBleSection(
 ) {
     // Estado para armazenar o dispositivo selecionado para uso posterior
     var selectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
+    var connectedDeviceName by remember { mutableStateOf("") }
     
     // Estado para os campos de SSID e senha
     var ssid by remember { mutableStateOf("") }
@@ -144,6 +150,7 @@ fun ThermalCameraBleSection(
     LaunchedEffect(selectedDevice) {
         if (selectedDevice != null) {
             wsViewModel.setThermalCameraDevice(selectedDevice!!)
+            connectedDeviceName = selectedDevice?.name ?: selectedDevice?.address ?: ""
             Log.d("ThermalCameraBleSection", "Dispositivo registrado no ViewModel: ${selectedDevice?.name}")
         }
     }
@@ -253,6 +260,7 @@ fun ThermalCameraBleSection(
                 Button(
                     onClick = { 
                         selectedDevice = result.device
+                        connectedDeviceName = result.device.name ?: result.device.address
                         onConnect(result.device) 
                     },
                     Modifier
@@ -283,7 +291,7 @@ fun ThermalCameraBleSection(
                     containerColor = MaterialTheme.colorScheme.error
                 )
             ) {
-                Text("Desconectar Câmera Térmica")
+                Text("Desconectar ${connectedDeviceName}")
             }
 
             Spacer(Modifier.height(16.dp))
