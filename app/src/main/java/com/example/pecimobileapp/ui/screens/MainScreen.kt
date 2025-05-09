@@ -10,12 +10,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 import androidx.navigation.NavHostController
-
+import com.example.pecimobileapp.ui.ProfileViewModel
+import com.example.pecimobileapp.viewmodels.ProfileViewModelFactory
 
 
 @Composable
@@ -24,6 +27,10 @@ fun MainScreen(
     wsViewModel: WebSocketViewModel,
     navController: NavHostController // Adicione o NavController aqui
 ) {
+
+    val context = LocalContext.current
+    val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(context))
+    val userId = profileViewModel.userId
     // 1) Coleta dos valores
     val hr             by viewModel.ppgHeartRate.collectAsState()
     val isPpgConnected by viewModel.isPpgConnected.collectAsState()
@@ -68,7 +75,7 @@ fun MainScreen(
             Text("Bom treino, ciclista!", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(16.dp))
 
-            // Só mostra instruções se nenhum sensor estiver conectado
+
             if (!isPpgConnected && !useBle && !useWs) {
                 Column(
                     modifier = Modifier
@@ -81,16 +88,13 @@ fun MainScreen(
                     }
 
                     Column {
-                        if (!perfilVisitado.value) {
+                        if (userId.isNullOrBlank()) {
                             Button(
-                                onClick = {
-                                    navController.navigate("profile")
-                                    perfilVisitado.value = true
-                                },
+                                onClick = { navController.navigate("profile") },
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Configurar perfil", fontWeight = FontWeight.Bold)
+                                Text("Completar perfil", fontWeight = FontWeight.Bold)
                             }
                         } else {
                             Button(
@@ -104,6 +108,7 @@ fun MainScreen(
                     }
                 }
             }
+
 
 
             // --- Card de Frequência Cardíaca ---
