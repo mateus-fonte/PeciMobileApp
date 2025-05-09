@@ -140,7 +140,7 @@ fun MainScreen(
                             }
                         }
                     }
-                } else if (isPpgConnected) {
+                } else if (!userId.isNullOrBlank() && isPpgConnected) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
