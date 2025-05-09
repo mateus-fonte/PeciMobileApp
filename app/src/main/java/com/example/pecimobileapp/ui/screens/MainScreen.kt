@@ -1,15 +1,24 @@
 package com.example.pecimobileapp.ui.screens
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,6 +71,16 @@ fun MainScreen(
         }
     }
 
+    val infiniteTransition = rememberInfiniteTransition()
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 500, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
@@ -69,75 +88,55 @@ fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(16.dp)
         ) {
-            Text("Bom treino, ciclista!", style = MaterialTheme.typography.headlineSmall)
+            Text("Bom treino, ciclista!", style = MaterialTheme.typography.headlineLarge)
             Spacer(Modifier.height(16.dp))
 
+            // CONTEÚDO CENTRAL SCROLLÁVEL
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ){
 
-            if (!isPpgConnected && !useBle && !useWs) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        InstructionCard()
-                    }
-
-                    Column {
-                        if (userId.isNullOrBlank()) {
-                            Button(
-                                onClick = { navController.navigate("profile") },
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Completar perfil", fontWeight = FontWeight.Bold)
-                            }
-                        } else {
-                            Button(
-                                onClick = { navController.navigate("setup") },
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Configurar sensores", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            }
-
-
-
-            // --- Card de Frequência Cardíaca ---
-            if (isPpgConnected) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(8.dp)
-                ) {
+                if (!isPpgConnected && !useBle && !useWs) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Frequência Cardíaca", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = hr?.let { "$it BPM" } ?: "-- BPM",
-                            style = MaterialTheme.typography.headlineLarge
-                        )
+                        Column {
+                            InstructionCard()
+                        }
+
+                        Column {
+                            if (userId.isNullOrBlank()) {
+                                Button(
+                                    onClick = { navController.navigate("profile") },
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Completar perfil", fontWeight = FontWeight.Bold)
+                                }
+                            } else {
+                                Button(
+                                    onClick = { navController.navigate("setup") },
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Configurar sensores", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
-            }
 
-            Spacer(Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-            // --- Cards de Temperatura ---
-            when {
-                useBle -> {
-                    // Média
+                // --- Card de Frequência Cardíaca ---
+                if (isPpgConnected) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -147,106 +146,182 @@ fun MainScreen(
                             modifier = Modifier.padding(16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("Temperatura Média", style = MaterialTheme.typography.titleMedium)
+                            Text("Frequência Cardíaca", style = MaterialTheme.typography.titleMedium)
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                text = avgTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
-                                style = MaterialTheme.typography.headlineLarge
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    // Máxima
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(8.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text("Temperatura Máxima", style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = maxTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
-                                style = MaterialTheme.typography.headlineLarge
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    // Mínima
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(8.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text("Temperatura Mínima", style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = minTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                                text = hr?.let { "$it BPM" } ?: "-- BPM",
                                 style = MaterialTheme.typography.headlineLarge
                             )
                         }
                     }
                 }
-                useWs -> {
-                    // Obtendo a temperatura do maior rosto detectado (principal)
-                    // Calculamos a temperatura facial com base na imagem processada atual
-                    val faceData = facialTemp.second
 
-                    // Obter a temperatura do maior rosto na imagem, se houver
-                    val faceTemp = if (faceData.isNotEmpty()) {
-                        // Encontrar o rosto com a maior área (provavelmente o mais próximo)
-                        val largestFace = faceData.maxByOrNull { it.width * it.height }
-                        largestFace?.temperature
-                    } else {
-                        null
-                    }
+                Spacer(Modifier.height(24.dp))
 
-                    // Se não tiver rosto na imagem atual, usar o método do ViewModel que armazena
-                    // a última temperatura válida
-                    val displayTemp = faceTemp ?: wsViewModel.getLargestFaceTemperature()
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(8.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                // --- Cards de Temperatura ---
+                when {
+                    useBle -> {
+                        // Média
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(8.dp)
                         ) {
-                            Text("Temperatura do Rosto Principal", style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = if (displayTemp > 0) "%.1f °C".format(displayTemp) else "-- °C",
-                                style = MaterialTheme.typography.headlineLarge
-                            )
-
-                            // Adicionar texto de status se não houver rostos detectados
-                            if (faceData.isEmpty()) {
-                                Spacer(Modifier.height(4.dp))
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("Temperatura Média", style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(8.dp))
                                 Text(
-                                    text = "Nenhum rosto detectado na imagem atual",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
+                                    text = avgTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                                    style = MaterialTheme.typography.headlineLarge
                                 )
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        // Máxima
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("Temperatura Máxima", style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = maxTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                                    style = MaterialTheme.typography.headlineLarge
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        // Mínima
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("Temperatura Mínima", style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = minTemp?.let { "%.1f °C".format(it) } ?: "-- °C",
+                                    style = MaterialTheme.typography.headlineLarge
+                                )
+                            }
+                        }
+                    }
+                    useWs -> {
+                        // Obtendo a temperatura do maior rosto detectado (principal)
+                        // Calculamos a temperatura facial com base na imagem processada atual
+                        val faceData = facialTemp.second
+
+                        // Obter a temperatura do maior rosto na imagem, se houver
+                        val faceTemp = if (faceData.isNotEmpty()) {
+                            // Encontrar o rosto com a maior área (provavelmente o mais próximo)
+                            val largestFace = faceData.maxByOrNull { it.width * it.height }
+                            largestFace?.temperature
+                        } else {
+                            null
+                        }
+
+                        // Se não tiver rosto na imagem atual, usar o método do ViewModel que armazena
+                        // a última temperatura válida
+                        val displayTemp = faceTemp ?: wsViewModel.getLargestFaceTemperature()
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("Temperatura do Rosto Principal", style = MaterialTheme.typography.titleMedium)
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = if (displayTemp > 0) "%.1f °C".format(displayTemp) else "-- °C",
+                                    style = MaterialTheme.typography.headlineLarge
+                                )
+
+                                // Adicionar texto de status se não houver rostos detectados
+                                if (faceData.isEmpty()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = "Nenhum rosto detectado na imagem atual",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        if ((isPpgConnected && useBle) || (isPpgConnected && useWs)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Button(
+                    onClick = { navController.navigate("define_workout") },
+                    enabled = true,
+                    modifier = Modifier
+                        .graphicsLayer(scaleX = pulse, scaleY = pulse)
+                        .height(64.dp) // mais gordinho
+                        .width(240.dp) // mais estreito na largura total da tela
+                        .align(Alignment.Center) // centralizado
+                        .padding(bottom = 12.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 12.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = Color.White
+                    ),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp) // padding interno
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        BicycleIcon()
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Iniciar Atividade Física",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+        }
     }
+}
+
+@Composable
+fun BicycleIcon(modifier: Modifier = Modifier) {
+    Icon(
+        imageVector = Icons.Default.DirectionsBike, // ou o que você estiver usando
+        contentDescription = "Ícone de bicicleta",
+        modifier = modifier
+    )
 }
 
 @Composable
