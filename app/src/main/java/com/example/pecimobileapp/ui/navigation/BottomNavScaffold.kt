@@ -1,6 +1,8 @@
 package com.example.pecimobileapp.ui.navigation
 
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -21,6 +23,7 @@ import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 import com.example.pecimobileapp.viewmodels.BluetoothViewModel
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomNavScaffold(
@@ -174,19 +177,20 @@ fun BottomNavScaffold(
                 ) { backStackEntry ->
                     val selectedZone = backStackEntry.arguments?.getInt("selectedZone") ?: 1
                     val groupId = backStackEntry.arguments?.getString("groupId")?.takeIf { it.isNotEmpty() }
-                    val userId = backStackEntry.arguments?.getString("userId") ?: "default_user"
-                    val exerciseId = backStackEntry.arguments?.getString("exerciseId") ?: "ex-teste"
+                    // val userId = backStackEntry.arguments?.getString("userId") ?: "default_user"
+                    // val exerciseId = backStackEntry.arguments?.getString("exerciseId") ?: "ex-teste"
 
-                    Log.d("BottomNavScaffold", "WorkoutScreen args: zone=$selectedZone, group=$groupId, user=$userId, exercise=$exerciseId")
+                    Log.d("BottomNavScaffold", "WorkoutScreen args: zone=$selectedZone, group=$groupId")
 
                     WorkoutScreen(
                         navController = navController,
                         selectedZone = selectedZone,
-                        groupId = groupId,
-                        userId = userId,
-                        exerciseId = exerciseId,
+                        isGroup = groupId != null,
+                        mqttManager = com.example.pecimobileapp.mqtt.MqttManager,
+                        groupName = groupId,
+                        onStop = { navController.popBackStack() },
                         realTimeViewModel = vm,
-                        onStop = { navController.popBackStack() }
+                        wsViewModel = webSocketViewModel // <-- Adicionado para adequar ao WorkoutScreen
                     )
                 }
             }

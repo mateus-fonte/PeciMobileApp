@@ -344,7 +344,8 @@ class WebSocketServerService(private val context: Context) {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
                 val networkInterface = interfaces.nextElement()
-                if (networkInterface.isUp && networkInterface.name == "ap0") {
+                Log.d(TAG, "Verificando status da interface ${networkInterface.name}")
+                if (networkInterface.isUp && networkInterface.name == "ap0" || networkInterface.name == "sw0") {
                     val addresses = networkInterface.inetAddresses
                     while (addresses.hasMoreElements()) {
                         val address = addresses.nextElement()
