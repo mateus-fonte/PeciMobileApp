@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.example.pecimobileapp.ble.BleManagerProvider
 import com.example.pecimobileapp.ui.navigation.AppNavigation
 import com.example.pecimobileapp.ui.theme.PeciMobileAppTheme
 import com.example.pecimobileapp.viewmodels.BluetoothViewModel
@@ -39,7 +40,7 @@ class MainActivity : ComponentActivity() {
 
     private val requestBluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
+    ) { permissions -> 
         val allGranted = permissions.entries.all { it.value }
         if (allGranted) {
             ensureBluetoothIsEnabled()
@@ -50,7 +51,7 @@ class MainActivity : ComponentActivity() {
 
     private val enableBluetoothLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { result ->
+    ) { result -> 
         if (result.resultCode == RESULT_OK) {
             bluetoothViewModel.updatePairedDevices()
         } else {

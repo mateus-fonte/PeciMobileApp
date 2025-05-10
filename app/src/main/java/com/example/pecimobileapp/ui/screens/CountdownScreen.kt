@@ -48,8 +48,11 @@ fun CountdownScreen(
 
         delay(500) // pequena pausa visual
 
-        // ✅ Navegar passando todos os parâmetros
-        navController.navigate("workout?selectedZone=$selectedZone&groupId=${groupId ?: ""}&userId=$userId&exerciseId=$exerciseId")
+        // Create navigation query string with proper groupId handling
+        val groupIdQuery = if (groupId.isNullOrBlank()) "" else "&groupId=$groupId"
+        
+        // Navigate with updated parameters
+        navController.navigate("workout?selectedZone=$selectedZone$groupIdQuery&userId=$userId&exerciseId=$exerciseId")
     }
 
     // UI da contagem
