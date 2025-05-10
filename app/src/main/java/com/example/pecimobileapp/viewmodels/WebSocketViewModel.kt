@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.bluetooth.BluetoothDevice
 import android.content.SharedPreferences
 import android.content.Context
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.preference.PreferenceManager
@@ -17,13 +16,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import com.example.pecimobileapp.ble.BleManager
-import com.example.pecimobileapp.ble.BleManagerProvider
 
 /**
  * ViewModel para gerenciar o servidor WebSocket e os dados recebidos
  */
 class WebSocketViewModel(application: Application) : AndroidViewModel(application) {
-    private val TAG = "WebSocketViewModel"
 
     // SharedPreferences para armazenamento persistente
     private val sharedPreferences: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(application)
@@ -41,8 +38,8 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     // Serviço WebSocket
     private val webSocketServer = WebSocketServerService(application.applicationContext)
 
-    // Usar BleManager compartilhado
-    private val bleManager = BleManagerProvider.getInstance()
+    // BleManager para a câmera térmica
+    private val bleManager = BleManager(getApplication())
 
     // Observável para o estado de conexão da câmera
     private val _isCameraConnected = MutableStateFlow(false)
@@ -105,7 +102,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             val context = getApplication<Application>().applicationContext
             if (context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != 
                     android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                android.util.Log.w(TAG, "Permissão BLUETOOTH_CONNECT não concedida para setThermalCameraDevice")
+                android.util.Log.w("WebSocketViewModel", "Permissão BLUETOOTH_CONNECT não concedida para setThermalCameraDevice")
                 return
             }
         }
@@ -119,9 +116,9 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 .putString(CAMERA_NAME_KEY, device.name ?: "Câmera Térmica")
                 .apply()
                 
-            android.util.Log.d(TAG, "Dispositivo da câmera térmica armazenado em SharedPreferences: ${device.name} (${device.address})")
+            android.util.Log.d("WebSocketViewModel", "Dispositivo da câmera térmica armazenado em SharedPreferences: ${device.name} (${device.address})")
         } catch (e: SecurityException) {
-            android.util.Log.e(TAG, "Erro de permissão ao acessar dispositivo Bluetooth: ${e.message}", e)
+            android.util.Log.e("WebSocketViewModel", "Erro de permissão ao acessar dispositivo Bluetooth: ${e.message}", e)
         }
     }
     
@@ -148,7 +145,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                     return _lastConnectedThermalCamera
                 }
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Não foi possível recuperar o dispositivo do BleManager", e)
+                android.util.Log.e("WebSocketViewModel", "Não foi possível recuperar o dispositivo do BleManager", e)
             }
         }
         
@@ -156,7 +153,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         try {
             val savedMacAddress = sharedPreferences.getString(CAMERA_MAC_ADDRESS_KEY, null)
             if (savedMacAddress != null) {
-                android.util.Log.d(TAG, "Tentando recuperar dispositivo do endereço MAC salvo: $savedMacAddress")
+                android.util.Log.d("WebSocketViewModel", "Tentando recuperar dispositivo do endereço MAC salvo: $savedMacAddress")
                 
                 // Verificar se temos a permissão de Bluetooth antes de prosseguir
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
@@ -164,7 +161,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                     val context = getApplication<Application>().applicationContext
                     if (context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) != 
                             android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                        android.util.Log.w(TAG, "Permissão BLUETOOTH_CONNECT não concedida")
+                        android.util.Log.w("WebSocketViewModel", "Permissão BLUETOOTH_CONNECT não concedida")
                         return null
                     }
                 }
@@ -176,17 +173,17 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                         // Usar BluetoothAdapter.getRemoteDevice(address) para reconstruir o objeto do dispositivo
                         val device = bluetoothAdapter.getRemoteDevice(savedMacAddress)
                         _lastConnectedThermalCamera = device
-                        android.util.Log.d(TAG, "Dispositivo reconstruído com sucesso a partir do endereço MAC salvo")
+                        android.util.Log.d("WebSocketViewModel", "Dispositivo reconstruído com sucesso a partir do endereço MAC salvo")
                         return device
                     }
                 } catch (e: SecurityException) {
                     // Captura especificamente SecurityException que pode ser lançada se a permissão não foi concedida
-                    android.util.Log.e(TAG, "Erro de permissão ao acessar Bluetooth: ${e.message}", e)
+                    android.util.Log.e("WebSocketViewModel", "Erro de permissão ao acessar Bluetooth: ${e.message}", e)
                     return null
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Erro ao recuperar dispositivo a partir do endereço MAC salvo", e)
+            android.util.Log.e("WebSocketViewModel", "Erro ao recuperar dispositivo a partir do endereço MAC salvo", e)
         }
         
         return null
@@ -194,8 +191,6 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     
     // Inicializa o monitoramento de imagens recebidas
     init {
-        Log.d(TAG, "Inicializando WebSocketViewModel com BleManager compartilhado")
-
         // Observa as imagens da câmera para atualizar o status de imageReceived
         viewModelScope.launch {
             latestCameraImage.collect { (bitmap, _) ->
@@ -248,7 +243,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 
                 // Se a conexão for perdida, atualiza o estado
                 if (!isConnected && _isCameraConnected.value) {
-                    android.util.Log.d(TAG, "Conexão BLE com a câmera perdida")
+                    android.util.Log.d("WebSocketViewModel", "Conexão BLE com a câmera perdida")
                 }
             }
         }
@@ -257,7 +252,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             bleManager.connectionLost.collect { isLost ->
                 if (isLost) {
-                    android.util.Log.d(TAG, "BleManager reportou perda de conexão")
+                    android.util.Log.d("WebSocketViewModel", "BleManager reportou perda de conexão")
                     _connectionError.value = "A conexão Bluetooth com a câmera foi perdida"
                 }
             }
@@ -271,7 +266,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         val result = webSocketServer.startServer(port) { actualPort ->
             // Armazena a porta real em que o servidor foi iniciado
             _currentServerPort.value = actualPort
-            android.util.Log.d(TAG, "Servidor WebSocket iniciado na porta: $actualPort")
+            android.util.Log.d("WebSocketViewModel", "Servidor WebSocket iniciado na porta: $actualPort")
         }
         if (result) {
             _serverState.value = WebSocketServerService.ServerState.Running
@@ -362,7 +357,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     fun startServerWithApCheck(port: Int = 8080): Pair<Boolean, WebSocketServerService.ServerState> {
         // Verifica primeiro se o AP está ativo
         val isApActive = checkAccessPointStatus()
-        android.util.Log.d(TAG, "Verificação de AP antes de iniciar servidor: ${if (isApActive) "ATIVO" else "INATIVO"}")
+        android.util.Log.d("WebSocketViewModel", "Verificação de AP antes de iniciar servidor: ${if (isApActive) "ATIVO" else "INATIVO"}")
         
         if (!isApActive) {
             _serverState.value = WebSocketServerService.ServerState.HotspotNotActive
@@ -387,7 +382,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 delay(500)
                 // Verifica se o servidor está realmente rodando (via serviço)
                 if (webSocketServer.isRunning.value) {
-                    android.util.Log.d(TAG, "Servidor WebSocket está rodando após verificação adicional")
+                    android.util.Log.d("WebSocketViewModel", "Servidor WebSocket está rodando após verificação adicional")
                     // Forçar o estado como Running para evitar falsos negativos
                     _serverState.value = WebSocketServerService.ServerState.Running
                 }
@@ -426,7 +421,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             }
             
             // Log para debug
-            android.util.Log.d(TAG, "Preparando configuração WiFi: SSID=$ssid, IP=$ip")
+            android.util.Log.d("WebSocketViewModel", "Preparando configuração WiFi: SSID=$ssid, IP=$ip")
             
             // Aqui você usaria o bleManager para enviar os dados via BLE
             // Por exemplo: bleManager.sendWifiConfig(ssid, password, ip)
@@ -439,7 +434,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             startServerWithApCheck()
             
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "Erro ao configurar WiFi", e)
+            android.util.Log.e("WebSocketViewModel", "Erro ao configurar WiFi", e)
             _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro: ${e.message}")
             _connectionError.value = "Erro ao configurar WiFi: ${e.message}"
         }
@@ -455,32 +450,163 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
      * 4. Envia as configurações WiFi para o ESP32 via BLE
      * 5. Aguarda até que o ESP32 se conecte e inicia o servidor WebSocket
      * 
+     * @param bleManager gerenciador BLE já conectado ao ESP32
      * @param ssid SSID do Access Point
      * @param password senha do Access Point
      */
-    fun configureEsp32AndStartServer(ssid: String, password: String) = viewModelScope.launch {
+    fun configureEsp32AndStartServer(bleManager: BleManager, ssid: String, password: String) = viewModelScope.launch {
         try {
-            Log.d(TAG, "Iniciando configuração do ESP32")
-            if (bleManager.isConnected.value) {
-                // Verificar se estamos conectados à câmera térmica
-                val deviceType = bleManager.currentDeviceType
-                if (deviceType == BleManager.DeviceType.THERMAL_CAMERA) {
-                    sendWifiConfig(ssid, password)
-                } else {
-                    Log.e(TAG, "Dispositivo conectado não é uma câmera térmica")
-                    _wifiConfigStatus.value = WifiConfigStatus.Failed(
-                        "Dispositivo conectado não é uma câmera térmica"
-                    )
+            android.util.Log.d("WebSocketViewModel", "====== INICIANDO CONFIGURAÇÃO ESP32 ======")
+            android.util.Log.d("WebSocketViewModel", "SSID: $ssid, Senha: ${password.take(2)}***")
+            
+            // Reseta o progresso da configuração e limpa erros anteriores
+            _setupProgress.value = 0f
+            _wifiConfigStatus.value = WifiConfigStatus.Configuring
+            _connectionError.value = null
+            _imageReceived.value = false
+            
+            // Observa o progresso do BleManager para escritas Bluetooth
+            val bleProgressJob = viewModelScope.launch {
+                bleManager.configProgress.collect { progress ->
+                    // Atualizamos o nosso progresso com base no progresso do BleManager
+                    _setupProgress.value = progress * 0.6f  // 60% do progresso total vem da configuração BLE
                 }
-            } else {
-                Log.e(TAG, "Nenhum dispositivo conectado")
-                _wifiConfigStatus.value = WifiConfigStatus.Failed(
-                    "Nenhum dispositivo conectado"
-                )
             }
+            
+            // 1. Verifica se o Access Point está ativo
+            android.util.Log.d("WebSocketViewModel", "Verificando status do Access Point...")
+            val isApActive = checkAccessPointStatus()
+            android.util.Log.d("WebSocketViewModel", "Status do Access Point: ${if (isApActive) "ATIVO" else "INATIVO"}")
+            
+            if (!isApActive) {
+                android.util.Log.d("WebSocketViewModel", "⚠️ ERRO: Access Point não está ativo. Configure o AP antes de continuar.")
+                _wifiConfigStatus.value = WifiConfigStatus.Failed("Access Point não está ativo")
+                _connectionError.value = "O hotspot do dispositivo não está ativo. Ative-o antes de continuar."
+                bleProgressJob.cancel()
+                return@launch
+            }
+            
+            // 2. Obtém o IP da interface ap0
+            android.util.Log.d("WebSocketViewModel", "Obtendo IP do Access Point...")
+            val apIp = getAccessPointIp()
+            android.util.Log.d("WebSocketViewModel", "IP obtido: $apIp")
+            
+            if (apIp == null) {
+                android.util.Log.d("WebSocketViewModel", "⚠️ ERRO: Não foi possível obter o IP do Access Point")
+                _wifiConfigStatus.value = WifiConfigStatus.Failed("Não foi possível obter o IP do Access Point")
+                _connectionError.value = "Não foi possível obter o IP do hotspot. Verifique as configurações e tente novamente."
+                bleProgressJob.cancel()
+                return@launch
+            }
+            
+            // 3. PRIMEIRO, inicia o servidor WebSocket para obter a porta real
+            android.util.Log.d("WebSocketViewModel", "Iniciando servidor WebSocket...")
+            
+            try {
+                // Iniciar o servidor WebSocket
+                val serverResult = startServerWithApCheck()
+                android.util.Log.d("WebSocketViewModel", "Resultado do servidor: $serverResult")
+                
+                if (serverResult.first) {
+                    android.util.Log.d("WebSocketViewModel", "✅ Servidor WebSocket iniciado com sucesso na porta: ${_currentServerPort.value}")
+                    // Servidor iniciado, avançamos para 80%
+                    _setupProgress.value = 0.8f
+                    
+                    // 4. DEPOIS, envia as configurações WiFi para o ESP32 via BLE com a porta correta
+                    android.util.Log.d("WebSocketViewModel", "Enviando configurações WiFi para ESP32: SSID=$ssid, IP=$apIp")
+                    try {
+                        // Incluir a porta real onde o servidor foi iniciado
+                        val ipWithPort = "$apIp:${_currentServerPort.value}"
+                        android.util.Log.d("WebSocketViewModel", "Enviando IP com porta real: $ipWithPort")
+                        // Tentar usar o método sendAllConfigs do BleManager
+                        bleManager.sendAllConfigs(ssid, password, ipWithPort)
+                        android.util.Log.d("WebSocketViewModel", "Comando de envio de configurações executado")
+                    } catch (e: Exception) {
+                        android.util.Log.e("WebSocketViewModel", "⚠️ ERRO ao enviar configurações: ${e.message}", e)
+                        _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro ao enviar configurações: ${e.message}")
+                        _connectionError.value = "Erro ao enviar configurações para a câmera: ${e.message}"
+                        bleProgressJob.cancel()
+                        return@launch
+                    }
+                    
+                    // Monitorar o status do envio das configurações
+                    android.util.Log.d("WebSocketViewModel", "Monitorando status do envio de configurações...")
+                    
+                    // Aguardar até que as configurações sejam enviadas
+                    while (!bleManager.allConfigSent.value) {
+                        android.util.Log.d("WebSocketViewModel", "Status de configuração: AGUARDANDO")
+                        kotlinx.coroutines.delay(1000)
+                    }
+                    
+                    android.util.Log.d("WebSocketViewModel", "Status de configuração: ENVIADO")
+                    
+                    // Configuração BLE enviada com sucesso, avançamos para 90%
+                    _setupProgress.value = 0.9f
+                    
+                    android.util.Log.d("WebSocketViewModel", "✅ Configurações enviadas com sucesso para ESP32")
+                    _wifiConfigStatus.value = WifiConfigStatus.Configured
+                    
+                    // Aguarda pela primeira imagem, com timeout de 10 segundos
+                    var imageReceived = false
+                    var connectionTimeoutJob: Job? = null
+                    
+                    // Configurar o timeout de 10 segundos
+                    connectionTimeoutJob = viewModelScope.launch {
+                        android.util.Log.d("WebSocketViewModel", "⏱️ Iniciando timeout de 10 segundos para receber imagem da câmera")
+                        delay(10000) // 10 segundos
+                        if (!imageReceived && _imageReceived.value == false) {
+                            android.util.Log.d("WebSocketViewModel", "⚠️ TIMEOUT: Não foi possível receber imagem da câmera em 10 segundos")
+                            _connectionError.value = "Timeout: A câmera não se conectou em 10 segundos. Verifique as configurações e tente novamente."
+                            _wifiConfigStatus.value = WifiConfigStatus.Failed("Timeout na conexão")
+                            _setupProgress.value = 0f
+                            prepareRetry()
+                            bleManager.disconnect() // Desconecta o BLE para permitir nova tentativa
+                        }
+                    }
+                    
+                    // Observar o recebimento da primeira imagem
+                    val imageMonitorJob = viewModelScope.launch {
+                        // Espera pela primeira imagem
+                        latestCameraImage.collect { (bitmap, _) ->
+                            if (bitmap != null && _setupProgress.value < 1f) {
+                                // Imagem recebida, progresso completo
+                                imageReceived = true
+                                _setupProgress.value = 1f
+                                _imageReceived.value = true
+                                connectionTimeoutJob?.cancel() // Cancela o job de timeout
+                                android.util.Log.d("WebSocketViewModel", "✅ Primeira imagem recebida, configuração completa!")
+                                return@collect
+                            }
+                        }
+                    }
+                    
+                    // Monitorar a contagem de clientes também
+                    viewModelScope.launch {
+                        connectionStats.collect { stats ->
+                            if (stats.clientsCount > 0 && !imageReceived) {
+                                imageReceived = true
+                                _setupProgress.value = 0.95f
+                                connectionTimeoutJob?.cancel() // Cancela o job de timeout
+                                android.util.Log.d("WebSocketViewModel", "✅ Cliente conectado ao WebSocket, aguardando imagem...")
+                            }
+                        }
+                    }
+                } else {
+                    android.util.Log.d("WebSocketViewModel", "⚠️ Falha ao iniciar servidor: ${serverResult.second}")
+                    _connectionError.value = "Falha ao iniciar servidor WebSocket. Verifique o hotspot do dispositivo."
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("WebSocketViewModel", "⚠️ ERRO ao iniciar servidor: ${e.message}", e)
+                _connectionError.value = "Erro ao iniciar servidor WebSocket: ${e.message}"
+            }
+            
+            // Cancelamos o job de monitoramento do BleManager
+            bleProgressJob.cancel()
+            
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao configurar ESP32", e)
-            _wifiConfigStatus.value = WifiConfigStatus.Failed(e.message ?: "Erro desconhecido")
+            android.util.Log.e("WebSocketViewModel", "⚠️ ERRO GERAL: ${e.message}", e)
+            _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro: ${e.message}")
+            _connectionError.value = "Erro na configuração: ${e.message}"
         }
     }
     
