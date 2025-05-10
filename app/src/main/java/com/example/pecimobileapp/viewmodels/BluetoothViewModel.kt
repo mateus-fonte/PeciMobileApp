@@ -15,7 +15,6 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.ble.BleManager
-import com.example.pecimobileapp.ble.BleManagerProvider
 import com.example.pecimobileapp.models.BluetoothDeviceModel
 import com.example.pecimobileapp.models.RaspberryPiStatus
 import com.example.pecimobileapp.repositories.BluetoothRepository
@@ -30,14 +29,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import android.bluetooth.le.ScanResult
-
 /**
  * ViewModel for Bluetooth operations with robust error handling and diagnostics
  */
 class BluetoothViewModel(application: Application) : AndroidViewModel(application) {
 
-    // Usar a instância compartilhada do BleManager
-    private val bleManager = BleManagerProvider.getInstance()
+    // Crie ou injete uma instância do seu BleManager
+    private val bleManager = BleManager(application)
     private val bluetoothRepository = BluetoothRepository(application)
     private val bluetoothService = BluetoothService(application)
     private val bluetoothResponseHandler = BluetoothResponseHandler(application)
@@ -121,8 +119,9 @@ class BluetoothViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+
+
     init {
-        Log.d(TAG, "Inicializando BluetoothViewModel com BleManager compartilhado")
         // Monitor scanning state from repository
         viewModelScope.launch {
             bluetoothRepository.isScanning.collect { isScanning ->
