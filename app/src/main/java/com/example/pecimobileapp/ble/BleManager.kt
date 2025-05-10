@@ -40,6 +40,15 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
     private val TAG = "BleManager"
 
+    // Enum para identificar tipo de dispositivo
+    enum class DeviceType {
+        PPG,
+        THERMAL_CAMERA
+    }
+
+    // Manter registro do tipo de dispositivo atual
+    private var currentDeviceType: DeviceType? = null
+
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val adapter: BluetoothAdapter? get() = bluetoothManager.adapter
     private var gatt: BluetoothGatt? = null
@@ -166,8 +175,18 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         startConnectionCheck()
     }
 
-    fun connectPpg(device: BluetoothDevice) = connect(device)
-    fun connectCam(device: BluetoothDevice) = connect(device)
+    @SuppressLint("MissingPermission")
+    fun connectPpg(device: BluetoothDevice) {
+        Log.d(TAG, "Conectando ao dispositivo PPG: ${device.name ?: device.address}")
+        currentDeviceType = DeviceType.PPG
+        connect(device)
+    }
+
+    fun connectCam(device: BluetoothDevice) {
+        Log.d(TAG, "Conectando à câmera térmica: ${device.name ?: device.address}")
+        currentDeviceType = DeviceType.THERMAL_CAMERA
+        connect(device)
+    }
 
     private fun attemptReconnect() {
         lastDevice?.let {
@@ -226,12 +245,16 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
     @SuppressLint("MissingPermission")
     override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+        val deviceInfo = "${g.device.name ?: g.device.address} (${currentDeviceType ?: "Unknown Type"})"
+        
         if (newState == BluetoothProfile.STATE_CONNECTED) {
+            Log.d(TAG, "Conectado com sucesso ao dispositivo: $deviceInfo")
             retryCount = 0
             _connected.value = true
             g.discoverServices()
             updateLastCommunicationTime()
         } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+            Log.d(TAG, "Desconectado do dispositivo: $deviceInfo")
             _connected.value = false
             attemptReconnect()
         }
@@ -279,30 +302,39 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
         when (characteristic.uuid) {
             HR_CHAR_UUID -> {
-                val afterDot = raw.substringAfter('.', "")
-                val digits = afterDot.filter(Char::isDigit)
-                val hr = digits.toIntOrNull()
-                _ppgHeartRate.value = hr
-                saveToFile(raw)
-                hr?.let {
-                    MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it, selectedZone, zonas)
+                if (currentDeviceType == DeviceType.PPG) {
+                    Log.d(TAG, "Recebendo dados PPG do dispositivo correto")
+                    val afterDot = raw.substringAfter('.', "")
+                    val digits = afterDot.filter(Char::isDigit)
+                    val hr = digits.toIntOrNull()
+                    _ppgHeartRate.value = hr
+                    saveToFile(raw)
+                    hr?.let {
+                        MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it, selectedZone, zonas)
+                    }
+                } else {
+                    Log.d(TAG, "Ignorando dados PPG de dispositivo não PPG")
                 }
             }
 
             SENSOR_DATA1_UUID, SENSOR_DATA2_UUID, SENSOR_DATA3_UUID -> {
-                val temp = raw.substringAfter('.', "0").filter(Char::isDigit).toIntOrNull()?.div(100f) ?: 0f
-                val source = when (characteristic.uuid) {
-                    SENSOR_DATA1_UUID -> { _avgTemp.value = temp; "avg_temp" }
-                    SENSOR_DATA2_UUID -> { _maxTemp.value = temp; "max_temp" }
-                    SENSOR_DATA3_UUID -> { _minTemp.value = temp; "min_temp" }
-                    else -> "unknown"
+                if (currentDeviceType == DeviceType.THERMAL_CAMERA) {
+                    Log.d(TAG, "Recebendo dados de temperatura da câmera térmica")
+                    val temp = raw.substringAfter('.', "0").filter(Char::isDigit).toIntOrNull()?.div(100f) ?: 0f
+                    val source = when (characteristic.uuid) {
+                        SENSOR_DATA1_UUID -> { _avgTemp.value = temp; "avg_temp" }
+                        SENSOR_DATA2_UUID -> { _maxTemp.value = temp; "max_temp" }
+                        SENSOR_DATA3_UUID -> { _minTemp.value = temp; "min_temp" }
+                        else -> "unknown"
+                    }
+                    saveToFile(raw)
+                    MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp, selectedZone, zonas)
+                } else {
+                    Log.d(TAG, "Ignorando dados de temperatura de dispositivo não câmera")
                 }
-                saveToFile(raw)
-                MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp, selectedZone, zonas)
             }
         }
     }
-
 
     private fun writeNextConfig() {
         val (uuid, data) = writeQueue.firstOrNull() ?: run {
