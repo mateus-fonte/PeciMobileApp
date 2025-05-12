@@ -182,7 +182,15 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         updateLastCommunicationTime()
     }    @SuppressLint("MissingPermission")
     fun connectPpg(device: BluetoothDevice) {
-        Log.d(TAG, "Conectando ao dispositivo PPG: ${device.name ?: device.address}")
+        Log.d(TAG, """
+            ===== Conectando PPG =====
+            Nome: ${device.name ?: "N/A"}
+            Endereço: ${device.address}
+            Tipo: ${device.type}
+            Estado atual: ${if (_connected.value) "Conectado" else "Desconectado"}
+            ====================
+        """.trimIndent())
+        
         currentDeviceType = DeviceType.PPG
         connect(device)
         // Registrar o dispositivo no provider
@@ -254,12 +262,32 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
         val deviceInfo = "${g.device.name ?: g.device.address} (${currentDeviceType ?: "Unknown Type"})"
         
+        // Map dos estados para strings legíveis
+        val stateStr = when (newState) {
+            BluetoothGatt.STATE_DISCONNECTED -> "DESCONECTADO"
+            BluetoothGatt.STATE_CONNECTING -> "CONECTANDO"
+            BluetoothGatt.STATE_CONNECTED -> "CONECTADO"
+            BluetoothGatt.STATE_DISCONNECTING -> "DESCONECTANDO"
+            else -> "DESCONHECIDO"
+        }
+        
+        Log.d(TAG, """
+            ===== Mudança de Estado BLE =====
+            Dispositivo: $deviceInfo
+            Estado: $stateStr
+            Status: $status
+            Desconexão Esperada: $expectingDisconnect
+            Tipo: ${currentDeviceType?.name ?: "Unknown"}
+            ================================
+        """.trimIndent())
+        
         when (newState) {
             BluetoothGatt.STATE_DISCONNECTED -> {
                 _connected.value = false
                 // Only emit connectionLost if we aren't expecting the disconnect
                 if (!expectingDisconnect) {
                     _connectionLost.value = true
+                    Log.w(TAG, "Desconexão inesperada detectada para $deviceInfo")
                 }
                 // Reset the flag after use
                 expectingDisconnect = false
@@ -313,20 +341,31 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             return
         }
 
-        when (characteristic.uuid) {
-            HR_CHAR_UUID -> {
+        when (characteristic.uuid) {            HR_CHAR_UUID -> {
                 if (currentDeviceType == DeviceType.PPG) {
-                    Log.d(TAG, "Recebendo dados PPG do dispositivo correto")
+                    Log.d(TAG, "Dados PPG recebidos (raw): $raw")
                     val afterDot = raw.substringAfter('.', "")
                     val digits = afterDot.filter(Char::isDigit)
                     val hr = digits.toIntOrNull()
+                    
+                    // Log detalhado dos valores
+                    Log.d(TAG, """
+                        ===== Dados PPG =====
+                        Raw data: $raw
+                        Após o ponto: $afterDot
+                        Dígitos filtrados: $digits
+                        BPM calculado: ${hr ?: "inválido"}
+                        ====================
+                    """.trimIndent())
+                    
                     _ppgHeartRate.value = hr
                     saveToFile(raw)
                     hr?.let {
+                        Log.d(TAG, "Publicando BPM: $it (Usuário: $userId, Exercício: $exerciseId, Zona: $selectedZone)")
                         MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it, selectedZone, zonas)
                     }
                 } else {
-                    Log.d(TAG, "Ignorando dados PPG de dispositivo não PPG")
+                    Log.w(TAG, "Ignorando dados PPG de dispositivo incorreto (DeviceType: ${currentDeviceType})")
                 }
             }
 
