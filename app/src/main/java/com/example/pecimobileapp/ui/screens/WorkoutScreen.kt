@@ -284,7 +284,7 @@ fun WorkoutScreen(
             colors = SliderDefaults.colors(
                 thumbColor = Color.White,
                 activeTrackColor = zoneColor,
-                inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
+                inactiveTrackColor = zoneColor
             )
         )
 
