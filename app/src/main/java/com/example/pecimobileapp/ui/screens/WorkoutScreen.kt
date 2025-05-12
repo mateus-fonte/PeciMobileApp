@@ -77,35 +77,12 @@ fun WorkoutScreen(
     val isPpgConnected by realTimeViewModel.isPpgConnected.collectAsState()
     val isWsConnected by wsViewModel.isWsConnected.collectAsState()
     val imageReceived by wsViewModel.imageReceived.collectAsState()
-
     val zonas by realTimeViewModel.zonas.collectAsState()
     val zonaAtual by realTimeViewModel.currentZone.collectAsState()
-    val zonaAlvo = selectedZone
 
     val tempoPorZona = remember { mutableStateListOf(0, 0, 0, 0, 0, 0) }
     var tempoTotal by remember { mutableStateOf(0) }
-    var lastUpdateTime by remember { mutableStateOf(System.currentTimeMillis()) }
-
     var desempenhoPct by remember { mutableStateOf(0f) }
-
-    val zoneColor = zoneColors[selectedZone] ?: zoneColors[0]!!
-    val currentZoneColor = zoneColors[zonaAtual] ?: zoneColors[0]!!
-
-    LaunchedEffect(hr, isPpgConnected, isCamConnected) {
-        if (isPpgConnected && isCamConnected && hr != null && zonas.isNotEmpty()) {
-            val now = System.currentTimeMillis()
-            if (zonaAtual in 1..6 && now - lastUpdateTime >= 1000) {
-                tempoTotal++
-                tempoPorZona[zonaAtual - 1]++
-                lastUpdateTime = now
-
-                if (tempoTotal % 10 == 0) {
-                    val tempoNaZonaAlvo = tempoPorZona.getOrNull(zonaAlvo - 1) ?: 0
-                    desempenhoPct = (tempoNaZonaAlvo.toFloat() / tempoTotal) * 100f
-                }
-            }
-        }
-    }
 
     var isRunning by remember { mutableStateOf(true) }
     var showStopDialog by remember { mutableStateOf(false) }
@@ -115,12 +92,13 @@ fun WorkoutScreen(
     var startTime by remember { mutableStateOf<Long?>(System.currentTimeMillis()) }
     var accumulatedTime by remember { mutableStateOf(0L) }
     var elapsed by remember { mutableStateOf(0) }
-
     val formattedTime = String.format("%02d:%02d:%02d", elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60)
-
     val outrosParticipantes = remember { mutableStateMapOf<String, Float>() }
 
-    // Início da sessão
+    val zonaAlvo = selectedZone
+    val zoneColor = zoneColors[selectedZone] ?: zoneColors[0]!!
+    val currentZoneColor = zoneColors[zonaAtual] ?: zoneColors[0]!!
+
     LaunchedEffect(Unit) {
         realTimeViewModel.setWorkoutParameters(
             zone = selectedZone,
@@ -139,6 +117,22 @@ fun WorkoutScreen(
             val now = System.currentTimeMillis()
             val currentElapsed = ((now - (startTime ?: now)) / 1000).toInt()
             elapsed = (accumulatedTime / 1000).toInt() + currentElapsed
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000L)
+            if (isRunning && isPpgConnected) {
+                val zona = if (hr != null) zonaAtual.coerceIn(0, 5) else 0
+                tempoPorZona[zona]++
+                tempoTotal++
+
+                if (tempoTotal % 10 == 0 && tempoTotal > 0) {
+                    val tempoNaZonaAlvo = tempoPorZona.getOrNull(selectedZone) ?: 0
+                    desempenhoPct = (tempoNaZonaAlvo.toFloat() / tempoTotal) * 100f
+                }
+            }
         }
     }
 
@@ -171,7 +165,6 @@ fun WorkoutScreen(
         }
     }
 
-    // ---------- UI ----------
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -180,7 +173,6 @@ fun WorkoutScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Header
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -191,26 +183,25 @@ fun WorkoutScreen(
                     isRunning = false
                     startTime?.let { accumulatedTime += System.currentTimeMillis() - it }
                     startTime = null
-                }) {
-                    Icon(Icons.Default.Pause, contentDescription = "Pause")
-                }
+                }) { Icon(Icons.Default.Pause, contentDescription = "Pause") }
+
                 IconButton(onClick = {
                     isRunning = true
                     startTime = System.currentTimeMillis()
-                }) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Play")
-                }
+                }) { Icon(Icons.Default.PlayArrow, contentDescription = "Play") }
+
                 IconButton(onClick = { showStopDialog = true }) {
                     Icon(Icons.Default.Stop, contentDescription = "Stop")
                 }
+
                 IconButton(onClick = { showResetDialog = true }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Reset")
                 }
             }
+
             Text(formattedTime, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
 
-        // Zona + HR
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().height(52.dp)) {
                 (0..5).forEach { i ->
@@ -298,24 +289,62 @@ fun WorkoutScreen(
         )
 
         if (groupId != null) {
-            // (grupo UI igual como já tens)
+            Spacer(Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(Modifier.height(8.dp))
+
+                    val top3 = outrosParticipantes.entries.sortedByDescending { it.value }.take(3)
+                    top3.forEach { (uid, pct) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(uid, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
+                            Slider(
+                                value = pct.coerceIn(0f, 100f),
+                                onValueChange = {},
+                                enabled = false,
+                                valueRange = 0f..100f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = zoneColor,
+                                    inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text("${pct.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            }
         }
     }
 
-    // Dialogs
     if (showResetDialog) {
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
             title = { Text("Reiniciar Treino") },
             text = { Text("O treino atual será perdido. Deseja continuar?") },
             confirmButton = {
-                TextButton(onClick = {
-                    isRunning = false
-                    MqttManager.WorkoutSessionManager.resetSession()
-                    navController.navigate("countdown") {
-                        popUpTo("workout") { inclusive = true }
-                    }
-                }) { Text("Sim") }
+                isRunning = false
+                MqttManager.WorkoutSessionManager.resetSession()
+                navController.navigate("countdown") {
+                    popUpTo("workout") { inclusive = true }
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showResetDialog = false }) { Text("Cancelar") }
@@ -329,11 +358,9 @@ fun WorkoutScreen(
             title = { Text("Parar Treino") },
             text = { Text("O treino será interrompido. Deseja continuar?") },
             confirmButton = {
-                TextButton(onClick = {
-                    isRunning = false
-                    realTimeViewModel.stopActivity()
-                    navController.popBackStack("define_workout", inclusive = false)
-                }) { Text("Sim") }
+                isRunning = false
+                realTimeViewModel.stopActivity()
+                navController.popBackStack("define_workout", inclusive = false)
             },
             dismissButton = {
                 TextButton(onClick = { showStopDialog = false }) { Text("Cancelar") }
