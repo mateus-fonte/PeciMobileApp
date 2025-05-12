@@ -341,26 +341,27 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             return
         }
 
-        when (characteristic.uuid) {            HR_CHAR_UUID -> {
+        when (characteristic.uuid) {              HR_CHAR_UUID -> {
                 if (currentDeviceType == DeviceType.PPG) {
                     Log.d(TAG, "Dados PPG recebidos (raw): $raw")
-                    val afterDot = raw.substringAfter('.', "")
-                    val digits = afterDot.filter(Char::isDigit)
-                    val hr = digits.toIntOrNull()
+                    
+                    // Extrair todos os dígitos da string
+                    val digits = raw.filter(Char::isDigit)
+                    val hr = digits.toIntOrNull()?.takeIf { it in 30..220 } // Validar BPM entre 30 e 220
                     
                     // Log detalhado dos valores
                     Log.d(TAG, """
                         ===== Dados PPG =====
                         Raw data: $raw
-                        Após o ponto: $afterDot
                         Dígitos filtrados: $digits
                         BPM calculado: ${hr ?: "inválido"}
                         ====================
                     """.trimIndent())
                     
-                    _ppgHeartRate.value = hr
-                    saveToFile(raw)
                     hr?.let {
+                        _ppgHeartRate.value = it
+                        Log.d(TAG, "Atualizando BPM: $it")
+                        saveToFile(raw)
                         Log.d(TAG, "Publicando BPM: $it (Usuário: $userId, Exercício: $exerciseId, Zona: $selectedZone)")
                         MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it, selectedZone, zonas)
                     }
