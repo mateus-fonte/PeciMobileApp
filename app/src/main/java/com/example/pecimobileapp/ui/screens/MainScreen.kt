@@ -97,55 +97,38 @@ fun MainScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Texto visível antes da conexão dos sensores
-            if (!isPpgConnected && !useBle && !useWs) {
-                Text(
-                    "Bem-vindo, ciclista!",
-                    style = MaterialTheme.typography.headlineLarge,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
-                )
-                Spacer(Modifier.height(16.dp))
-            }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-            ) {
-                if (!isPpgConnected && !useBle && !useWs) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
+            when {
+                userId.isNullOrBlank() -> {
+                    // Caso 1: Sem ID
+                    InstructionCard()
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = { navController.navigate("profile") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Column {
-                            InstructionCard()
-                        }
-
-                        Column {
-                            if (userId.isNullOrBlank()) {
-                                Button(
-                                    onClick = { navController.navigate("profile") },
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Completar perfil", fontWeight = FontWeight.Bold)
-                                }
-                            } else {
-                                Button(
-                                    onClick = { navController.navigate("setup") },
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Configurar sensores", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
+                        Text("Completar perfil", fontWeight = FontWeight.Bold)
                     }
-                } else if (!userId.isNullOrBlank() && isPpgConnected) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
+                }
+
+                !isPpgConnected -> {
+                    // Caso 2: Tem ID, mas ainda não conectou o PPG
+                    InstructionCard()
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = { navController.navigate("setup") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        // Imagem como plano de fundo
+                        Text("Conectar Sensores", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                else -> {
+                    // Caso 3: ID válido e PPG conectado — mostra imagem + botão iniciar
+                    Box(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
                         Image(
                             painter = painterResource(id = R.drawable.bike_illustration),
                             contentDescription = null,
@@ -155,16 +138,14 @@ fun MainScreen(
                                 .alpha(0.4f)
                         )
 
-                        // Texto por cima da imagem
                         Text(
                             text = "Preparado para pedalar?",
                             style = MaterialTheme.typography.headlineLarge,
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
-                                .padding(top = 15.dp) // distância do topo
+                                .padding(top = 15.dp)
                         )
 
-                        // Botão no final (também sobre a imagem)
                         Button(
                             onClick = { navController.navigate("define_workout") },
                             modifier = Modifier
@@ -186,8 +167,6 @@ fun MainScreen(
         }
     }
 }
-
-
 
 @Composable
 fun BicycleIcon(modifier: Modifier = Modifier) {
