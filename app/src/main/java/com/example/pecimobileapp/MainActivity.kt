@@ -14,17 +14,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import com.example.pecimobileapp.ui.navigation.AppNavigation
 import com.example.pecimobileapp.ui.theme.PeciMobileAppTheme
 import com.example.pecimobileapp.viewmodels.BluetoothViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
-import com.hivemq.client.mqtt.MqttClient
-import com.hivemq.client.mqtt.datatypes.MqttQos
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
-import java.nio.charset.StandardCharsets
-import java.util.*
 
 class MainActivity : ComponentActivity() {
     private val bluetoothViewModel: BluetoothViewModel by viewModels()
@@ -34,7 +27,6 @@ class MainActivity : ComponentActivity() {
         val bluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothManager.adapter
     }
-
 
     private val requestBluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -60,7 +52,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Conectar os ViewModels para compartilhar informações do dispositivo
+        // Conectar os ViewModels
         bluetoothViewModel.setWebSocketViewModel(webSocketViewModel)
 
         setContent {
@@ -87,6 +79,9 @@ class MainActivity : ComponentActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
             }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            }
         } else {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.BLUETOOTH_ADMIN)
@@ -111,5 +106,4 @@ class MainActivity : ComponentActivity() {
             bluetoothViewModel.updatePairedDevices()
         }
     }
-
 }
