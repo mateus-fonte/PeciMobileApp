@@ -423,7 +423,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
      * @return IP da interface ap0 ou null se não estiver disponível
      */
     fun getAccessPointIp(): String? {
-        return webSocketServer.getAp0IpAddress()
+        return webSocketServer.getDeviceIpAddress()
     }
     
     /**
