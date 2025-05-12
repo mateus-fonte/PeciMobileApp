@@ -44,9 +44,20 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
     // Zona selecionada e faixas de zona
     private val _selectedZone = MutableStateFlow(1)
     val selectedZone: StateFlow<Int> = _selectedZone
-
     private val _zonas = MutableStateFlow<List<Pair<String, IntRange>>>(emptyList())
     val zonas: StateFlow<List<Pair<String, IntRange>>> = _zonas
+
+    val currentZone: StateFlow<Int> = combine(ppgHeartRate, zonas) { hr, zonasList ->
+        val zona = if (hr == null || hr <= 0) {
+            0
+        } else {
+            val idx = zonasList.indexOfFirst { hr in it.second }
+            if (idx >= 0) idx + 1 else 0
+        }
+        Log.d("RealTimeViewModel", "Zona atual: $zona") // Adiciona o log
+        zona
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
 
     // Adicionados para persistência de contexto da sessão
     private val _groupId = MutableStateFlow<String?>(null)
@@ -88,23 +99,23 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
 
 
     fun setWorkoutParameters(
-    zone: Int,
-    zonasList: List<Pair<String, IntRange>>,
-    group: String? = null,
-    user: String,
-    exercise: String
-) {
-    Log.d("RealTimeViewModel", "Setting workout parameters -> zone: $zone, group: $group, user: $user, exercise: $exercise")
+        zone: Int,
+        zonasList: List<Pair<String, IntRange>>,
+        group: String? = null,
+        user: String,
+        exercise: String
+    ) {
+        Log.d("RealTimeViewModel", "Setting workout parameters -> zone: $zone, group: $group, user: $user, exercise: $exercise")
 
-    _selectedZone.value = zone
-    _zonas.value = zonasList
-    _groupId.value = group
-    _userId.value = user
-    _exerciseId.value = exercise
+        _selectedZone.value = zone
+        _zonas.value = zonasList
+        _groupId.value = group
+        _userId.value = user
+        _exerciseId.value = exercise
 
-    blePpg.setSessionParameters(group, user, exercise, zone, zonasList)
-    bleCam.setSessionParameters(group, user, exercise, zone, zonasList)
-}
+        blePpg.setSessionParameters(group, user, exercise, zone, zonasList)
+        bleCam.setSessionParameters(group, user, exercise, zone, zonasList)
+    }
 
     fun startPpgScan() = viewModelScope.launch { blePpg.startScan() }
     fun connectPpg(device: BluetoothDevice) = viewModelScope.launch { blePpg.connectPpg(device) }

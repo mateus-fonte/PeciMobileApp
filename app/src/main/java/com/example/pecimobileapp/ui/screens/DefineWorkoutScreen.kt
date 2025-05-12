@@ -196,22 +196,22 @@ fun DefineWorkoutScreen(navController: NavController) {
             else -> false
         }
         Button(
-    onClick = {
-        val groupParam = if (workoutMode == "individual") null else groupFullName
-        val userId = profileViewModel.userId ?: "default_user"
+            onClick = {
+                val groupParam = if (workoutMode == "individual") null else groupFullName
+                val userId = profileViewModel.userId ?: "default_user"
 
-        Log.d("DefineWorkoutScreen", "selectedZone: $selectedZone, groupId: $groupParam, userId: $userId")
+                Log.d("DefineWorkoutScreen", "selectedZone: $selectedZone, groupId: $groupParam, userId: $userId")
 
-        navController.currentBackStackEntry?.savedStateHandle?.set("selectedZone", selectedZone)
-        navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupParam)
-        navController.currentBackStackEntry?.savedStateHandle?.set("userId", userId)
+                navController.currentBackStackEntry?.savedStateHandle?.set("selectedZone", selectedZone)
+                navController.currentBackStackEntry?.savedStateHandle?.set("groupId", groupParam)
+                navController.currentBackStackEntry?.savedStateHandle?.set("userId", userId)
 
-        navController.navigate("countdown")
-    },
-    enabled = canStart,
-    modifier = Modifier.fillMaxWidth()
-) {
-    Text("Iniciar treino")
-}
+                navController.navigate("countdown")
+            },
+            enabled = canStart,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Iniciar treino")
+        }
     }
 }

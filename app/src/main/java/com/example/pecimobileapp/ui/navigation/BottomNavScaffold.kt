@@ -18,6 +18,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
@@ -177,25 +178,27 @@ fun BottomNavScaffold(
                 ) { backStackEntry ->
                     val selectedZone = backStackEntry.arguments?.getInt("selectedZone") ?: 1
                     val groupId = backStackEntry.arguments?.getString("groupId")?.takeIf { it.isNotEmpty() }
-                    // val userId = backStackEntry.arguments?.getString("userId") ?: "default_user"
-                    // val exerciseId = backStackEntry.arguments?.getString("exerciseId") ?: "ex-teste"
+                    val userId = backStackEntry.arguments?.getString("userId") ?: "default_user"
+                    val exerciseId = backStackEntry.arguments?.getString("exerciseId") ?: "ex-teste"
 
-                    Log.d("BottomNavScaffold", "WorkoutScreen args: zone=$selectedZone, group=$groupId")
+                    Log.d("BottomNavScaffold", "WorkoutScreen args: zone=$selectedZone, group=$groupId, user=$userId, exercise=$exerciseId")
 
                     WorkoutScreen(
                         navController = navController,
                         selectedZone = selectedZone,
-                        isGroup = groupId != null,
-                        mqttManager = com.example.pecimobileapp.mqtt.MqttManager,
-                        groupName = groupId,
-                        onStop = { navController.popBackStack() },
+                        mqttManager = MqttManager,
+                        groupId = groupId,
                         realTimeViewModel = vm,
-                        wsViewModel = webSocketViewModel // <-- Adicionado para adequar ao WorkoutScreen
+                        wsViewModel = webSocketViewModel,
+                        onStop = {
+                            navController.popBackStack("define_workout", inclusive = false)
+                        },
+                        userId = userId,
+                        exerciseId = exerciseId
                     )
                 }
             }
 
-            // AlertDialog para confirmação ao sair da WorkoutScreen
             if (showLeaveWorkoutDialog) {
                 AlertDialog(
                     onDismissRequest = {
@@ -208,7 +211,7 @@ fun BottomNavScaffold(
                         TextButton(onClick = {
                             showLeaveWorkoutDialog = false
                             pendingNavigationRoute?.let {
-                                vm.stopActivity() // <-- encerra corretamente o treino
+                                vm.stopActivity()
                                 navController.navigate(it) {
                                     popUpTo("main") { inclusive = false }
                                 }
