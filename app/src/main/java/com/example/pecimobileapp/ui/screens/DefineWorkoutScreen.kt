@@ -195,6 +195,9 @@ fun DefineWorkoutScreen(navController: NavController) {
             "criar", "entrar" -> groupFullName.isNotEmpty()
             else -> false
         }
+
+        //Botao para iniciar treino
+
         Button(
             onClick = {
                 val groupParam = if (workoutMode == "individual") null else groupFullName
