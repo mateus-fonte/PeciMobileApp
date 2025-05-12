@@ -132,6 +132,23 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
     val fcMaxCalculada: Int?
         get() = idade?.let { (208 - 0.7 * it).toInt() }
 
+    // Zonas de frequência cardíaca calculadas a partir do ano de nascimento (usando fcMaxCalculada)
+    val zona0Range: IntRange?
+        get() = fcMaxCalculada?.let { 0 until (it * 0.50).toInt() }
+    val zona1Range: IntRange?
+        get() = fcMaxCalculada?.let { (it * 0.50).toInt()..(it * 0.60).toInt() }
+    val zona2Range: IntRange?
+        get() = fcMaxCalculada?.let { (it * 0.60).toInt()..(it * 0.70).toInt() }
+    val zona3Range: IntRange?
+        get() = fcMaxCalculada?.let { (it * 0.70).toInt()..(it * 0.80).toInt() }
+    val zona4Range: IntRange?
+        get() = fcMaxCalculada?.let { (it * 0.80).toInt()..(it * 0.90).toInt() }
+    val zona5Range: IntRange?
+        get() = fcMaxCalculada?.let { ((it * 0.90).toInt() + 1)..it }
+
+    val zonasRanges: List<IntRange?>
+        get() = listOf(zona0Range, zona1Range, zona2Range, zona3Range, zona4Range, zona5Range)
+
     val fcMax: Int?
         get() = fcMaxManual ?: fcMaxCalculada
 
