@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,6 +30,10 @@ import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 import kotlinx.coroutines.delay
 import org.json.JSONObject
+import androidx.compose.ui.res.painterResource
+import com.example.pecimobileapp.R
+
+
 
 val zoneColors = mapOf(
     0 to Color(0xFFBDBDBD),
@@ -275,18 +280,32 @@ fun WorkoutScreen(
             }
         }
 
-        Text("Execução na Zona Alvo", color = Color.White, fontWeight = FontWeight.Bold)
-        Slider(
-            value = desempenhoPct.coerceIn(0f, 100f),
-            onValueChange = {},
-            enabled = false,
-            valueRange = 0f..100f,
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = zoneColor,
-                inactiveTrackColor = zoneColor
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.heart_check),
+                contentDescription = "Ícone de coração com check",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
             )
-        )
+            Spacer(modifier = Modifier.width(8.dp))
+            Slider(
+                value = desempenhoPct.coerceIn(0f, 100f),
+                onValueChange = {},
+                enabled = false,
+                valueRange = 0f..100f,
+                colors = SliderDefaults.colors(
+                    thumbColor = Color.White,
+                    activeTrackColor = zoneColor,
+                    inactiveTrackColor = zoneColor.copy(alpha = 0.24f)
+                )
+            )
+        }
+
 
         if (groupId != null) {
             Spacer(Modifier.height(16.dp))
