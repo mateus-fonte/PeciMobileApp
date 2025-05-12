@@ -82,8 +82,8 @@ fun ProfileScreen(navToEdit: () -> Unit = {}) {
                         5 to Color(0xFFE53935)   // Z5 – Alta Intensidade
                     )
 
-                    if (viewModel.zonas.isNotEmpty()) {
-                        viewModel.zonas.forEachIndexed { index, (nome, faixa) ->
+                    if (viewModel.zoneRange.isNotEmpty()) {
+                        viewModel.zoneRange.forEachIndexed { index, (nome, faixa) ->
                             val cor = zoneColors[index + 1] ?: Color.LightGray
 
                             Card(

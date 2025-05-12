@@ -152,7 +152,7 @@ class ProfileViewModel(private val context: Context) : ViewModel() {
     val fcMax: Int?
         get() = fcMaxManual ?: fcMaxCalculada
 
-    val zonas: List<Pair<String, IntRange>>
+    val zoneRange: List<Pair<String, IntRange>>
         get() = fcMax?.let { fc ->
             listOf(
                 "Zona 1" to (fc * 0.50).toInt()..(fc * 0.60).toInt(),
