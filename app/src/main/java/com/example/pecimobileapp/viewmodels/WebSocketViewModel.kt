@@ -424,13 +424,28 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 _connectionError.value = "Não foi possível obter o IP do Access Point."
                 return@launch
             }
-            
-            // Log para debug
+              // Log para debug
             android.util.Log.d(TAG, "Preparando configuração WiFi: SSID=$ssid, IP=$ip")
             
-            // Aqui você usaria o bleManager para enviar os dados via BLE
-            // Por exemplo: bleManager.sendWifiConfig(ssid, password, ip)
-            // Como este código é intermediário, vamos apenas simular o sucesso
+            // Usar o BleManager para enviar os dados de configuração WiFi
+            if (bleManager is BleManager) {
+                bleManager.sendAllConfigs(ssid, password, ip)
+                
+                // Observe o progresso da configuração
+                viewModelScope.launch {
+                    bleManager.configProgress.collect { progress ->
+                        _setupProgress.value = progress
+                        if (progress >= 0.99f) {
+                            _wifiConfigStatus.value = WifiConfigStatus.Configured
+                        }
+                    }
+                }
+            } else {
+                // Falha se o bleManager não for do tipo correto
+                _wifiConfigStatus.value = WifiConfigStatus.Failed("BleManager inválido")
+                _connectionError.value = "Erro interno: BleManager inválido"
+                return@launch
+            }
             
             _wifiConfigStatus.value = WifiConfigStatus.Configured
             _connectionError.value = null
@@ -481,6 +496,73 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao configurar ESP32", e)
             _wifiConfigStatus.value = WifiConfigStatus.Failed(e.message ?: "Erro desconhecido")
+        }
+    }
+      /**
+     * Envia a configuração WiFi para a câmera térmica conectada via BLE
+     * 
+     * @param ssid SSID do Access Point
+     * @param password senha do Access Point
+     */
+    private suspend fun sendWifiConfig(ssid: String, password: String) {
+        try {
+            _wifiConfigStatus.value = WifiConfigStatus.Configuring
+            
+            // Verificar se o AP está ativo
+            if (!checkAccessPointStatus()) {
+                _wifiConfigStatus.value = WifiConfigStatus.Failed("Access Point não está ativo")
+                _connectionError.value = "Access Point não está ativo. Ative o hotspot e tente novamente."
+                return
+            }
+            
+            // Obter o IP da interface ap0
+            val ip = getAccessPointIp()
+            if (ip == null) {
+                _wifiConfigStatus.value = WifiConfigStatus.Failed("Não foi possível obter o IP do Access Point")
+                _connectionError.value = "Não foi possível obter o IP do Access Point."
+                return
+            }
+            
+            // Log para debug
+            Log.d(TAG, "Enviando configuração WiFi: SSID=$ssid, IP=$ip")
+            
+            // Usar o BleManager para enviar a configuração
+            bleManager.sendAllConfigs(ssid, password, ip)
+              // Observe o progresso da configuração
+            var configCompleted = false
+            val timeoutJob = viewModelScope.launch {
+                delay(30000) // 30 segundos de timeout
+                if (!configCompleted) {
+                    _wifiConfigStatus.value = WifiConfigStatus.Failed("Timeout na configuração")
+                    _connectionError.value = "Timeout ao enviar a configuração para a câmera."
+                }
+            }
+            
+            // Observa o progresso limitado ao tempo necessário para configuração
+            val progressJob = viewModelScope.launch {
+                bleManager.configProgress.collect { progress ->
+                    _setupProgress.value = progress
+                    if (progress >= 0.99f) {
+                        configCompleted = true
+                        timeoutJob.cancel()
+                        _wifiConfigStatus.value = WifiConfigStatus.Configured
+                        
+                        // Iniciar o servidor WebSocket automaticamente
+                        startServerWithApCheck()
+                        
+                        // Não precisamos continuar coletando
+                        this.cancel()
+                    }
+                }
+            }
+            
+            // Aguarde até que o trabalho de progresso seja concluído ou cancelado
+            progressJob.join()
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao enviar configuração WiFi: ${e.message}", e)
+            _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro: ${e.message}")
+            _connectionError.value = "Erro ao enviar configuração WiFi: ${e.message}"
         }
     }
     

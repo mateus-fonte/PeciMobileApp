@@ -75,10 +75,11 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     val minTemp: StateFlow<Float?> = _minTemp
 
     private val _allConfigSent = MutableStateFlow(false)
-    val allConfigSent: StateFlow<Boolean> = _allConfigSent
-
-    private val _configProgress = MutableStateFlow(0f)
+    val allConfigSent: StateFlow<Boolean> = _allConfigSent    private val _configProgress = MutableStateFlow(0f)
     val configProgress: StateFlow<Float> = _configProgress
+    
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning
 
     private val totalConfigSteps = 5
     private val writeQueue = ArrayDeque<Pair<UUID, ByteArray>>()
@@ -132,8 +133,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         activityStarted = false
         Log.d(TAG, "Atividade encerrada: envio de dados via MQTT bloqueado")
     }
-
-
     @SuppressLint("MissingPermission")
     fun startScan() {
         val btAdapter = adapter ?: return
@@ -144,8 +143,31 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
         _scanResults.value = emptyList()
         val scanner = btAdapter.bluetoothLeScanner ?: return
+        
+        // Atualizar estado de escaneamento para true
+        _isScanning.value = true
+        
         scanner.startScan(scanCb)
-        Handler(Looper.getMainLooper()).postDelayed({ scanner.stopScan(scanCb) }, 10_000)
+        
+        // Agendar o fim da busca após 10 segundos
+        Handler(Looper.getMainLooper()).postDelayed({ 
+            stopScan()
+        }, 10_000)
+    }
+    
+    @SuppressLint("MissingPermission")
+    fun stopScan() {
+        val btAdapter = adapter ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN)
+            != PackageManager.PERMISSION_GRANTED
+        ) return
+            
+        val scanner = btAdapter.bluetoothLeScanner ?: return
+        scanner.stopScan(scanCb)
+        
+        // Atualizar estado de escaneamento para false
+        _isScanning.value = false
     }
 
     private val scanCb = object : ScanCallback() {
@@ -173,6 +195,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
         // Iniciar verificação periódica de conexão
         startConnectionCheck()
+        updateLastCommunicationTime()
     }
 
     @SuppressLint("MissingPermission")
@@ -190,6 +213,8 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
     private fun attemptReconnect() {
         lastDevice?.let {
+            log.d(TAG, "Tentando reconectar ao dispositivo: ${it.name ?: it.address}")
+            updateLastCommunicationTime()
             if (retryCount < maxRetries) {
                 retryCount++
                 Handler(Looper.getMainLooper()).postDelayed({ connect(it) }, retryDelayMs)
