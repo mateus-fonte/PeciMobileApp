@@ -2,7 +2,6 @@ package com.example.pecimobileapp.ui.navigation
 
 import android.util.Log
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -10,12 +9,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.example.pecimobileapp.R
 import com.example.pecimobileapp.ui.screens.*
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
@@ -49,16 +50,45 @@ fun BottomNavScaffold(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("The Heart Box", color = Color.White) },
+                title = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "The Heart Box",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { /* ação opcional */ }) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.logo),
+                            contentDescription = "Logo",
+                            tint = Color.Unspecified,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .padding(start = 8.dp)
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = { handleNavigation("profile") }) {
-                        Icon(Icons.Default.Person, contentDescription = "Perfil", tint = Color.White)
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Perfil",
+                            tint = Color.White
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.smallTopAppBarColors(containerColor = Color(0xFF8A2BE2))
             )
         },
-        bottomBar = {
+
+                bottomBar = {
             val isMainSelected = currentRoute == "main"
 
             Box {
@@ -191,7 +221,6 @@ fun BottomNavScaffold(
                 }
             }
 
-            // AlertDialog para confirmação ao sair da WorkoutScreen
             if (showLeaveWorkoutDialog) {
                 AlertDialog(
                     onDismissRequest = {
@@ -204,7 +233,7 @@ fun BottomNavScaffold(
                         TextButton(onClick = {
                             showLeaveWorkoutDialog = false
                             pendingNavigationRoute?.let {
-                                vm.stopActivity() // <-- encerra corretamente o treino
+                                vm.stopActivity()
                                 navController.navigate(it) {
                                     popUpTo("main") { inclusive = false }
                                 }
