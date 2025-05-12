@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.pecimobileapp.mqtt.MqttManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,25 +22,24 @@ import java.io.FileWriter
 import java.io.IOException
 import java.util.*
 
-private val HR_SERVICE_UUID        = UUID.fromString("e626a696-36ba-45b3-a444-5c28eb674dd5")
-private val HR_CHAR_UUID           = UUID.fromString("aa4fe3ac-56c4-42c7-856e-500b8d4b1a01")
+private val HR_SERVICE_UUID = UUID.fromString("e626a696-36ba-45b3-a444-5c28eb674dd5")
+private val HR_CHAR_UUID = UUID.fromString("aa4fe3ac-56c4-42c7-856e-500b8d4b1a01")
 
-private val SENSOR_SERVICE_UUID    = UUID.fromString("b07d5e84-4d21-4d4a-8694-5ed9f6aa2aee")
-private val SENSOR_DATA1_UUID      = UUID.fromString("89aa9a0d-48c4-4c32-9854-e3c7f44ec091")
-private val SENSOR_DATA2_UUID      = UUID.fromString("a430a2ed-0a76-4418-a5ad-4964699ba17c")
-private val SENSOR_DATA3_UUID      = UUID.fromString("853f9ba1-94aa-4124-92ff-5a8f576767e4")
+private val SENSOR_SERVICE_UUID = UUID.fromString("b07d5e84-4d21-4d4a-8694-5ed9f6aa2aee")
+private val SENSOR_DATA1_UUID = UUID.fromString("89aa9a0d-48c4-4c32-9854-e3c7f44ec091")
+private val SENSOR_DATA2_UUID = UUID.fromString("a430a2ed-0a76-4418-a5ad-4964699ba17c")
+private val SENSOR_DATA3_UUID = UUID.fromString("853f9ba1-94aa-4124-92ff-5a8f576767e4")
 
-private val CLIENT_CFG_UUID        = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+private val CLIENT_CFG_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-private val CONFIG_SERVICE_UUID    = UUID.fromString("0a3b6985-dad6-4759-8852-dcb266d3a59e")
-private val CONFIG_SSID_UUID       = UUID.fromString("ab35e54e-fde4-4f83-902a-07785de547b9")
-private val CONFIG_PASS_UUID       = UUID.fromString("c1c4b63b-bf3b-4e35-9077-d5426226c710")
-private val CONFIG_SERVERIP_UUID   = UUID.fromString("0c954d7e-9249-456d-b949-cc079205d393")
+private val CONFIG_SERVICE_UUID = UUID.fromString("0a3b6985-dad6-4759-8852-dcb266d3a59e")
+private val CONFIG_SSID_UUID = UUID.fromString("ab35e54e-fde4-4f83-902a-07785de547b9")
+private val CONFIG_PASS_UUID = UUID.fromString("c1c4b63b-bf3b-4e35-9077-d5426226c710")
+private val CONFIG_SERVERIP_UUID = UUID.fromString("0c954d7e-9249-456d-b949-cc079205d393")
 
 class BleManager(private val context: Context) : BluetoothGattCallback() {
 
     private val TAG = "BleManager"
-
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val adapter: BluetoothAdapter? get() = bluetoothManager.adapter
     private var gatt: BluetoothGatt? = null
@@ -79,34 +79,24 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private val retryDelayMs = 5000L
     private var activityStarted = false
 
-
-    // Adicionando variáveis para verificação periódica de conexão
     private val connectionCheckHandler = Handler(Looper.getMainLooper())
     private val connectionCheckRunnable = object : Runnable {
         override fun run() {
             checkConnection()
-            // Agendar novamente em 5 segundos
             connectionCheckHandler.postDelayed(this, 5000)
         }
     }
     private var lastCommunicationTime = System.currentTimeMillis()
-    private val connectionTimeout = 600000L // 10 minutos
+    private val connectionTimeout = 600000L
     private var connectionCheckActive = false
 
-    // Sessão atual
-    private var groupId: String = "grupo1"
-    private var userId: String = "aluno01"
-    private var exerciseId: String = "exercicio_teste"
-    private var selectedZone: Int = 1
+    private var groupId = "grupo1"
+    private var userId = "aluno01"
+    private var exerciseId = "exercicio_teste"
+    private var selectedZone = 1
     private var zonas: List<Pair<String, IntRange>> = emptyList()
 
-    fun setSessionParameters(
-        group: String?,
-        user: String,
-        exercise: String,
-        selectedZone: Int,
-        zonasList: List<Pair<String, IntRange>>
-    ) {
+    fun setSessionParameters(group: String?, user: String, exercise: String, selectedZone: Int, zonasList: List<Pair<String, IntRange>>) {
         this.groupId = group ?: "individual"
         this.userId = user
         this.exerciseId = exercise
@@ -123,7 +113,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         activityStarted = false
         Log.d(TAG, "Atividade encerrada: envio de dados via MQTT bloqueado")
     }
-
 
     @SuppressLint("MissingPermission")
     fun startScan() {
@@ -161,8 +150,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         ) return
 
         gatt = device.connectGatt(context, false, this)
-
-        // Iniciar verificação periódica de conexão
         startConnectionCheck()
     }
 
@@ -182,7 +169,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         }
     }
 
-    // Método para iniciar verificação periódica
     private fun startConnectionCheck() {
         if (!connectionCheckActive) {
             connectionCheckActive = true
@@ -191,7 +177,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         }
     }
 
-    // Método para parar verificação periódica
     private fun stopConnectionCheck() {
         connectionCheckActive = false
         connectionCheckHandler.removeCallbacks(connectionCheckRunnable)
@@ -199,27 +184,28 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
     private fun checkConnection() {
         if (!_connected.value) return
-    
+
         val timeSinceLastCommunication = System.currentTimeMillis() - lastCommunicationTime
         if (timeSinceLastCommunication > connectionTimeout) {
             Log.d(TAG, "Conexão parece estar inativa por $timeSinceLastCommunication ms. Tentando reconectar...")
-            attemptReconnect() // Tenta reconectar antes de considerar desconectado
+            attemptReconnect()
         }
     }
 
-    // Lidar com conexão perdida
     private fun handleConnectionLost() {
         if (_connected.value) {
             Log.d(TAG, "Detectada desconexão por inatividade")
             _connected.value = false
             _connectionLost.value = true
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                return
+            }
             gatt?.close()
             gatt = null
             stopConnectionCheck()
         }
     }
 
-    // Atualizar timestamp da última comunicação
     private fun updateLastCommunicationTime() {
         lastCommunicationTime = System.currentTimeMillis()
     }
@@ -283,6 +269,12 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
                 val digits = afterDot.filter(Char::isDigit)
                 val hr = digits.toIntOrNull()
                 _ppgHeartRate.value = hr
+
+                if (hr != null) {
+                    Log.d(TAG, "Frequência cardíaca recebida: $hr BPM")
+                    MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", hr, selectedZone, zonas)
+                }
+
                 saveToFile(raw)
                 hr?.let {
                     MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it, selectedZone, zonas)
@@ -303,7 +295,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         }
     }
 
-
     private fun writeNextConfig() {
         val (uuid, data) = writeQueue.firstOrNull() ?: run {
             _allConfigSent.value = true
@@ -323,10 +314,15 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         }
 
         chr.value = data
+        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+
         if (!g.writeCharacteristic(chr)) {
             writeQueue.removeFirst()
             writeNextConfig()
         }
+
         updateLastCommunicationTime()
     }
 

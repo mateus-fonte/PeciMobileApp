@@ -27,6 +27,10 @@ fun CountdownScreen(
     val groupId = remember {
         navController.previousBackStackEntry?.savedStateHandle?.get<String?>("groupId")
     }
+    val zonas = remember {
+        navController.previousBackStackEntry?.savedStateHandle?.get<List<Pair<String, IntRange>>>("zonas") ?: emptyList()
+    }
+
     val userId = remember {
         navController.previousBackStackEntry?.savedStateHandle?.get<String>("userId") ?: "default_user"
     }
@@ -49,6 +53,7 @@ fun CountdownScreen(
         delay(500) // pequena pausa visual
 
         // ✅ Navegar passando todos os parâmetros
+        navController.currentBackStackEntry?.savedStateHandle?.set("zonas", zonas)
         navController.navigate("workout?selectedZone=$selectedZone&groupId=${groupId ?: ""}&userId=$userId&exerciseId=$exerciseId")
     }
 
