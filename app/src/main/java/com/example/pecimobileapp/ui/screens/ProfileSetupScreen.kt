@@ -47,12 +47,11 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
 
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-
                     // Campo Nome
                     OutlinedTextField(
                         value = viewModel.nome ?: "",
                         onValueChange = {
-                            val cleaned = it.filterNot { c -> c.isWhitespace() }
+                            val cleaned = it.filter { c -> c.isLetter() }.take(20)
                             viewModel.updateNome(cleaned.ifBlank { null })
                         },
                         label = { Text("Nome") },
@@ -67,10 +66,10 @@ fun ProfileSetupScreen(onSave: () -> Unit = {}) {
                     OutlinedTextField(
                         value = viewModel.sobrenome ?: "",
                         onValueChange = {
-                            val cleaned = it.filterNot { c -> c.isWhitespace() }.take(20)
+                            val cleaned = it.filter { c -> c.isLetter() }.take(20)
                             viewModel.updateSobrenome(cleaned.ifBlank { null })
                         },
-                        label = { Text("Sobrenome") },
+                        label = { Text("Apelido") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         modifier = Modifier.fillMaxWidth()
