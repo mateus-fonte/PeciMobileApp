@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
+import kotlinx.coroutines.launch
 
 /**
  * Ícones customizados para representar funcionalidades específicas
@@ -242,9 +243,11 @@ fun SetupScreen(
     // Definindo cores personalizadas
     val purpleButtonColor = Color(0xFF9C64A6) // Cor roxa clara como estava anteriormente
     val startButtonColor = MaterialTheme.colorScheme.primary
-    
-    // SnackbarHostState para mostrar mensagens temporárias
+      // SnackbarHostState para mostrar mensagens temporárias
     val snackbarHostState = remember { SnackbarHostState() }
+    
+    // Remember the coroutine scope for use in callbacks
+    val scope = rememberCoroutineScope()
 
     // Inicialização - para marcar que a tela já foi carregada
     LaunchedEffect(Unit) {
@@ -367,16 +370,16 @@ fun SetupScreen(
                         onAdvancedOptions = { ssid, password, device ->
                             android.util.Log.d("SetupScreen", "CALLBACK ACIONADO - Configurando WiFi: SSID=$ssid")
                             
-                            val bleManager = viewModel.getBleManager()
-                            if (bleManager != null) {
-                                wsViewModel.configureEsp32AndStartServer(
-                                    bleManager = bleManager,
+                            scope.launch {
+                                val success = wsViewModel.configureEsp32AndStartServer(
                                     ssid = ssid,
                                     password = password
                                 )
-                                android.util.Log.d("SetupScreen", "Configuração WiFi iniciada com sucesso")
-                            } else {
-                                android.util.Log.e("SetupScreen", "BleManager não disponível!")
+                                if (success) {
+                                    android.util.Log.d("SetupScreen", "Configuração WiFi iniciada com sucesso")
+                                } else {
+                                    android.util.Log.e("SetupScreen", "Falha ao iniciar configuração WiFi")
+                                }
                             }
                         },
                         buttonColor = purpleButtonColor,
