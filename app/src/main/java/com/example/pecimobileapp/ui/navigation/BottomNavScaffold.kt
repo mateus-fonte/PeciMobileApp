@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -19,10 +20,9 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.example.pecimobileapp.mqtt.MqttManager
+import com.example.pecimobileapp.ui.ProfileViewModel
 import com.example.pecimobileapp.ui.screens.*
-import com.example.pecimobileapp.viewmodels.RealTimeViewModel
-import com.example.pecimobileapp.viewmodels.WebSocketViewModel
-import com.example.pecimobileapp.viewmodels.BluetoothViewModel
+import com.example.pecimobileapp.viewmodels.*
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,12 +34,29 @@ fun BottomNavScaffold(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val vm: RealTimeViewModel = viewModel()
+    val realTimeViewModel: RealTimeViewModel = viewModel()
+    val context = LocalContext.current
+    val profileViewModel: ProfileViewModel = viewModel(factory = ProfileViewModelFactory(context))
 
     var showLeaveWorkoutDialog by remember { mutableStateOf(false) }
     var pendingNavigationRoute by remember { mutableStateOf<String?>(null) }
 
     val isInWorkout = currentRoute?.startsWith("workout") == true
+
+    // Sincroniza zonas do perfil com RealTimeViewModel
+    LaunchedEffect(profileViewModel.zoneRange, profileViewModel.userId) {
+        val zonasAtualizadas = profileViewModel.zoneRange
+        val userId = profileViewModel.userId ?: "default_user"
+        if (zonasAtualizadas.isNotEmpty()) {
+            realTimeViewModel.setWorkoutParameters(
+                zone = realTimeViewModel.selectedZone.value,
+                zonasList = zonasAtualizadas,
+                group = realTimeViewModel.groupId.value,
+                user = userId,
+                exercise = realTimeViewModel.exerciseId.value
+            )
+        }
+    }
 
     fun handleNavigation(destination: String) {
         if (isInWorkout) {
@@ -134,10 +151,10 @@ fun BottomNavScaffold(
                 modifier = Modifier.fillMaxSize()
             ) {
                 composable("setup") {
-                    SetupScreen(vm, navController, webSocketViewModel)
+                    SetupScreen(realTimeViewModel, navController, webSocketViewModel)
                 }
                 composable("main") {
-                    MainScreen(vm, webSocketViewModel, navController)
+                    MainScreen(realTimeViewModel, webSocketViewModel, navController)
                 }
                 composable("websocket") {
                     WebSocketScreen(webSocketViewModel)
@@ -161,10 +178,8 @@ fun BottomNavScaffold(
                 composable("countdown") {
                     CountdownScreen(
                         navController = navController,
-                        viewModel = vm,
-                        onCountdownFinished = {
-                            // handled inside countdown
-                        }
+                        viewModel = realTimeViewModel,
+                        onCountdownFinished = { /* handled in screen */ }
                     )
                 }
                 composable(
@@ -188,7 +203,7 @@ fun BottomNavScaffold(
                         selectedZone = selectedZone,
                         mqttManager = MqttManager,
                         groupId = groupId,
-                        realTimeViewModel = vm,
+                        realTimeViewModel = realTimeViewModel,
                         wsViewModel = webSocketViewModel,
                         onStop = {
                             navController.popBackStack("define_workout", inclusive = false)
@@ -211,7 +226,7 @@ fun BottomNavScaffold(
                         TextButton(onClick = {
                             showLeaveWorkoutDialog = false
                             pendingNavigationRoute?.let {
-                                vm.stopActivity()
+                                realTimeViewModel.stopActivity()
                                 navController.navigate(it) {
                                     popUpTo("main") { inclusive = false }
                                 }
