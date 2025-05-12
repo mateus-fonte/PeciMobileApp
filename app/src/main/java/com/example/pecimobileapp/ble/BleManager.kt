@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.pecimobileapp.mqtt.MqttManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -190,7 +191,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             Estado atual: ${if (_connected.value) "Conectado" else "Desconectado"}
             ====================
         """.trimIndent())
-        
+
         currentDeviceType = DeviceType.PPG
         connect(device)
         // Registrar o dispositivo no provider
@@ -198,6 +199,34 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     }
 
     fun connectCam(device: BluetoothDevice) {
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return
+        }
+        if (ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return
+        }
         Log.d(TAG, "Conectando à câmera térmica: ${device.name ?: device.address}")
         currentDeviceType = DeviceType.THERMAL_CAMERA
         connect(device)
@@ -205,6 +234,20 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         BleManagerProvider.getInstance().registerConnectedDevice(device, BleManagerProvider.DeviceType.THERMAL_CAMERA)
     }    private fun attemptReconnect() {
         lastDevice?.let {
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return
+            }
             Log.d(TAG, "Tentando reconectar ao dispositivo: ${it.name ?: it.address}")
             updateLastCommunicationTime()
             if (retryCount < maxRetries) {
@@ -235,7 +278,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
     private fun checkConnection() {
         if (!_connected.value) return
-    
+
         val timeSinceLastCommunication = System.currentTimeMillis() - lastCommunicationTime
         if (timeSinceLastCommunication > connectionTimeout) {
             Log.d(TAG, "Conexão parece estar inativa por $timeSinceLastCommunication ms. Tentando reconectar...")
@@ -249,6 +292,20 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             Log.d(TAG, "Detectada desconexão por inatividade")
             _connected.value = false
             _connectionLost.value = true
+            if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return
+            }
             gatt?.close()
             gatt = null
             stopConnectionCheck()
@@ -261,7 +318,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     }    @SuppressLint("MissingPermission")
     override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
         val deviceInfo = "${g.device.name ?: g.device.address} (${currentDeviceType ?: "Unknown Type"})"
-        
+
         // Map dos estados para strings legíveis
         val stateStr = when (newState) {
             BluetoothGatt.STATE_DISCONNECTED -> "DESCONECTADO"
@@ -270,7 +327,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             BluetoothGatt.STATE_DISCONNECTING -> "DESCONECTANDO"
             else -> "DESCONHECIDO"
         }
-        
+
         Log.d(TAG, """
             ===== Mudança de Estado BLE =====
             Dispositivo: $deviceInfo
@@ -280,7 +337,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             Tipo: ${currentDeviceType?.name ?: "Unknown"}
             ================================
         """.trimIndent())
-        
+
         when (newState) {
             BluetoothGatt.STATE_DISCONNECTED -> {
                 _connected.value = false
@@ -342,33 +399,33 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         }
 
         when (characteristic.uuid) {              HR_CHAR_UUID -> {
-                if (currentDeviceType == DeviceType.PPG) {
-                    Log.d(TAG, "Dados PPG recebidos (raw): $raw")
-                    
-                    // Extrair todos os dígitos da string
-                    val digits = raw.filter(Char::isDigit)
-                    val hr = digits.toIntOrNull()?.takeIf { it in 30..220 } // Validar BPM entre 30 e 220
-                    
-                    // Log detalhado dos valores
-                    Log.d(TAG, """
+            if (currentDeviceType == DeviceType.PPG) {
+                Log.d(TAG, "Dados PPG recebidos (raw): $raw")
+
+                // Extrair todos os dígitos da string
+                val bpmStr = raw.substringAfterLast(".").takeWhile { it.isDigit() }
+                val hr = bpmStr.toIntOrNull()?.takeIf { it in 30..220 }
+
+                // Log detalhado dos valores
+                Log.d(TAG, """
                         ===== Dados PPG =====
                         Raw data: $raw
-                        Dígitos filtrados: $digits
+                        Dígitos filtrados: $bpmStr
                         BPM calculado: ${hr ?: "inválido"}
                         ====================
                     """.trimIndent())
-                    
-                    hr?.let {
-                        _ppgHeartRate.value = it
-                        Log.d(TAG, "Atualizando BPM: $it")
-                        saveToFile(raw)
-                        Log.d(TAG, "Publicando BPM: $it (Usuário: $userId, Exercício: $exerciseId, Zona: $selectedZone)")
-                        MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it, selectedZone, zonas)
-                    }
-                } else {
-                    Log.w(TAG, "Ignorando dados PPG de dispositivo incorreto (DeviceType: ${currentDeviceType})")
+
+                hr?.let {
+                    _ppgHeartRate.value = it
+                    Log.d(TAG, "Atualizando BPM: $it")
+                    saveToFile(raw)
+                    Log.d(TAG, "Publicando BPM: $it (Usuário: $userId, Exercício: $exerciseId, Zona: $selectedZone)")
+                    MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it, selectedZone, zonas)
                 }
+            } else {
+                Log.w(TAG, "Ignorando dados PPG de dispositivo incorreto (DeviceType: ${currentDeviceType})")
             }
+        }
 
             SENSOR_DATA1_UUID, SENSOR_DATA2_UUID, SENSOR_DATA3_UUID -> {
                 if (currentDeviceType == DeviceType.THERMAL_CAMERA) {
@@ -418,7 +475,23 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
         try {
             characteristic.value = data
-            val success = g.writeCharacteristic(characteristic)
+            val success = if (ActivityCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                false
+            } else {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return
+            }
+            g.writeCharacteristic(characteristic)
             if (!success) {
                 Log.e(TAG, "Falha ao iniciar escrita para característica: $uuid")
                 _allConfigSent.value = false
@@ -440,19 +513,19 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
             Log.e(TAG, "GATT não está disponível para enviar configurações")
             return
         }
-        
+
         // Resetar progresso e estado
         _configProgress.value = 0f
         _allConfigSent.value = false
-        
+
         Log.d(TAG, "Iniciando envio de configurações WiFi")
         Log.d(TAG, "SSID: $ssid")
         Log.d(TAG, "Server IP: $serverIp")
-        
+
         // Set that we're expecting a disconnect after sending configs
         expectingDisconnect = true
         writeQueue.clear()
-        
+
         // Adiciona configs na ordem correta e com logs
         writeQueue.addAll(
             listOf(
@@ -461,7 +534,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
                 CONFIG_SERVERIP_UUID to serverIp.toByteArray()
             )
         )
-        
+
         Log.d(TAG, "Fila de configurações preparada com ${writeQueue.size} itens")
 
         // Pequeno delay antes de iniciar o envio
@@ -474,17 +547,17 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         status: Int
     ) {
         super.onCharacteristicWrite(gatt, characteristic, status)
-          if (status == BluetoothGatt.GATT_SUCCESS) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
             Log.d(TAG, "Configuração escrita com sucesso: ${characteristic.uuid}")
             if (writeQueue.isNotEmpty()) {
                 writeQueue.removeFirst()
             }
-            
+
             // Atualizar progresso
             val total = 3f // Total de configs esperadas
             val remaining = writeQueue.size
             _configProgress.value = ((total - remaining) / total)
-            
+
             // Adicionar delay antes da próxima escrita
             Handler(Looper.getMainLooper()).postDelayed({
                 if (writeQueue.isNotEmpty()) {
@@ -539,7 +612,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
      */
     private fun findCharacteristic(uuid: UUID): BluetoothGattCharacteristic? {
         val g = gatt ?: return null
-        
+
         // Procura em todos os serviços
         g.services?.forEach { service ->
             service.characteristics?.forEach { characteristic ->
@@ -548,7 +621,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
                 }
             }
         }
-        
+
         return null
     }
 }
