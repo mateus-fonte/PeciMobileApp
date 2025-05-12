@@ -219,18 +219,19 @@ class OpenCVUtils(private val context: Context) {
         // 2. Converter para Mat e aplicar colormap
         val thermalMat = Mat(thermalHeight, thermalWidth, CvType.CV_8UC1)
         thermalMat.put(0, 0, normalizedData)
-
-        // 2.1 Aplicar Gaussian Blur antes do colormap
-        val blurredMat = Mat()
-        Imgproc.GaussianBlur(thermalMat, blurredMat, Size(3.0, 3.0), 0.0)
         
-        // 2.2 Aplicar o colormap JET no resultado suavizado
+        // Aplicar o colormap JET primeiro
         val colorMat = Mat()
-        Imgproc.applyColorMap(blurredMat, colorMat, Imgproc.COLORMAP_JET)
+        Core.bitwise_not(thermalMat, thermalMat)
+        Imgproc.applyColorMap(thermalMat, colorMat, Imgproc.COLORMAP_JET)
+
+        // Depois aplicar Gaussian Blur no resultado colorido
+        val blurredMat = Mat()
+        Imgproc.GaussianBlur(colorMat, blurredMat, Size(3.0, 3.0), 0.0)
         
-        // 3. Redimensionar para o tamanho da imagem original usando interpolação cúbica
+        // 3. Redimensionar o resultado borrado para o tamanho da imagem original
         val resizedMat = Mat()
-        Imgproc.resize(colorMat, resizedMat, Size(bitmap.width.toDouble(), bitmap.height.toDouble()), 0.0, 0.0, Imgproc.INTER_CUBIC)
+        Imgproc.resize(blurredMat, resizedMat, Size(bitmap.width.toDouble(), bitmap.height.toDouble()), 0.0, 0.0, Imgproc.INTER_CUBIC)
         
         // 4. Converter para Bitmap
         val thermalBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
