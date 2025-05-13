@@ -298,10 +298,16 @@ fun WorkoutScreen(
                 onValueChange = {},
                 enabled = false,
                 valueRange = 0f..100f,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
                 colors = SliderDefaults.colors(
                     thumbColor = Color.White,
                     activeTrackColor = zoneColor,
-                    inactiveTrackColor = zoneColor.copy(alpha = 0.24f)
+                    inactiveTrackColor = zoneColor.copy(alpha = 0.3f),
+                    disabledThumbColor = Color.White,
+                    disabledActiveTrackColor = zoneColor,
+                    disabledInactiveTrackColor = zoneColor.copy(alpha = 0.3f)
                 )
             )
         }
