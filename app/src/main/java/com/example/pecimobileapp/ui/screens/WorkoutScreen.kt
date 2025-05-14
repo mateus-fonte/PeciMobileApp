@@ -76,6 +76,8 @@ fun WorkoutScreen(
     exerciseId: String,
     onStop: () -> Unit
 ) {
+    Log.d("WorkoutScreen", "Parâmetros recebidos: selectedZone=$selectedZone, groupId=$groupId, userId=$userId, exerciseId=$exerciseId")
+    Log.d("WorkoutScreen", "RealTimeViewModel zonas=${realTimeViewModel.zonas.value}")
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
     val avgTemp by realTimeViewModel.avgTemp.collectAsState()
     val isCamConnected by realTimeViewModel.isCamConnected.collectAsState()
@@ -85,9 +87,7 @@ fun WorkoutScreen(
     val zonas by realTimeViewModel.zonas.collectAsState()
     val zonaAtual by realTimeViewModel.currentZone.collectAsState()
 
-    val tempoPorZona = remember { mutableStateListOf(0, 0, 0, 0, 0, 0) }
-    var tempoTotal by remember { mutableStateOf(0) }
-    var desempenhoPct by remember { mutableStateOf(0f) }
+    val desempenhoPct by realTimeViewModel.desempenhoPct.collectAsState()
 
     var isRunning by remember { mutableStateOf(true) }
     var showStopDialog by remember { mutableStateOf(false) }
@@ -105,6 +105,10 @@ fun WorkoutScreen(
     val currentZoneColor = zoneColors[zonaAtual] ?: zoneColors[0]!!
 
     LaunchedEffect(Unit) {
+    try {
+        Log.d("WorkoutScreen", "Resetando sessão antes de iniciar nova atividade")
+        realTimeViewModel.resetSession()
+        Log.d("WorkoutScreen", "Chamando setWorkoutParameters")
         realTimeViewModel.setWorkoutParameters(
             zone = selectedZone,
             zonasList = zonas,
@@ -112,9 +116,13 @@ fun WorkoutScreen(
             user = userId,
             exercise = "session-${System.currentTimeMillis()}"
         )
+        Log.d("WorkoutScreen", "Chamando startActivity")
         realTimeViewModel.startActivity()
-        Log.d("WorkoutScreen", "Início do treino com ID: session-${System.currentTimeMillis()}")
+        Log.d("WorkoutScreen", "Treino iniciado com sucesso")
+    } catch (e: Exception) {
+        Log.e("WorkoutScreen", "Erro ao iniciar treino", e)
     }
+}
 
     LaunchedEffect(isRunning) {
         while (isRunning) {
@@ -125,36 +133,22 @@ fun WorkoutScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000L)
-            if (isRunning && isPpgConnected) {
-                val zona = if (hr != null) zonaAtual.coerceIn(0, 5) else 0
-                tempoPorZona[zona]++
-                tempoTotal++
 
-                if (tempoTotal % 10 == 0 && tempoTotal > 0) {
-                    val tempoNaZonaAlvo = tempoPorZona.getOrNull(selectedZone) ?: 0
-                    desempenhoPct = (tempoNaZonaAlvo.toFloat() / tempoTotal) * 100f
+    LaunchedEffect(groupId, userId) {
+    // Só faz subscribe se estiver em grupo de verdade
+    if (groupId != null && groupId != userId && mqttManager != null) {
+        mqttManager.subscribe("/group/$groupId/data") { raw ->
+            try {
+                val json = org.json.JSONObject(raw)
+                if (json.has("rating")) {
+                    val uid = json.getString("user_uid")
+                    val rating = json.getDouble("rating").toFloat()
+                    outrosParticipantes[uid] = rating
                 }
-            }
+            } catch (_: Exception) {}
         }
     }
-
-    LaunchedEffect(groupId) {
-        if (groupId != null && mqttManager != null) {
-            mqttManager.subscribe("/group/$groupId/data") { raw ->
-                try {
-                    val json = JSONObject(raw)
-                    if (json.has("rating")) {
-                        val uid = json.getString("user_uid")
-                        val rating = json.getDouble("rating").toFloat()
-                        outrosParticipantes[uid] = rating
-                    }
-                } catch (_: Exception) {}
-            }
-        }
-    }
+}
 
     BackHandler {
         isRunning = false
@@ -313,50 +307,56 @@ fun WorkoutScreen(
         }
 
 
-        if (groupId != null) {
-            Spacer(Modifier.height(16.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp, horizontal = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
-                    Spacer(Modifier.height(4.dp))
-                    Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(Modifier.height(8.dp))
+        // ...existing code...
+if (groupId != null) {
+    Spacer(Modifier.height(16.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
+            Spacer(Modifier.height(4.dp))
+            Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(Modifier.height(8.dp))
 
-                    val top3 = outrosParticipantes.entries.sortedByDescending { it.value }.take(3)
-                    top3.forEach { (uid, pct) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(uid, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
-                            Slider(
-                                value = pct.coerceIn(0f, 100f),
-                                onValueChange = {},
-                                enabled = false,
-                                valueRange = 0f..100f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color.White,
-                                    activeTrackColor = zoneColor,
-                                    inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text("${pct.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
-                        }
-                    }
+            // Junta o próprio usuário e os outros participantes
+            val allParticipants = buildMap {
+                put(userId, desempenhoPct)
+                putAll(outrosParticipantes)
+            }
+            allParticipants.entries.sortedByDescending { it.value }.forEach { (uid, pct) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(uid, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
+                    Slider(
+                        value = pct.coerceIn(0f, 100f),
+                        onValueChange = {},
+                        enabled = false,
+                        valueRange = 0f..100f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color.White,
+                            activeTrackColor = zoneColor,
+                            inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text("${pct.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
                 }
             }
         }
+    }
+}
+// ...existing code...
     }
 
     if (showResetDialog) {

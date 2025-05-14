@@ -54,6 +54,7 @@ fun CountdownScreen(
 
         // ✅ Navegar passando todos os parâmetros
         navController.currentBackStackEntry?.savedStateHandle?.set("zonas", zonas)
+        Log.d("CountdownScreen", "Navegando para WorkoutScreen com selectedZone=$selectedZone, groupId=$groupId, userId=$userId, exerciseId=$exerciseId")
         navController.navigate("workout?selectedZone=$selectedZone&groupId=${groupId ?: ""}&userId=$userId&exerciseId=$exerciseId")
     }
 

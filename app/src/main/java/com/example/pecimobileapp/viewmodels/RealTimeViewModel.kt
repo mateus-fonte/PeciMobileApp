@@ -6,6 +6,7 @@ import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import com.example.pecimobileapp.ble.DeviceType
 import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.ble.BleManager
 import com.example.pecimobileapp.ble.BleManagerProvider
@@ -22,6 +23,7 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
 
     val scanResultsPpg: StateFlow<List<ScanResult>> = bleManager.scanResults
     val scanResultsCam: StateFlow<List<ScanResult>> = bleManager.scanResults
+    val desempenhoPct: StateFlow<Float> = bleManager.desempenhoPct
 
     private val _isPpgConnected = MutableStateFlow(false)
     val isPpgConnected: StateFlow<Boolean> = _isPpgConnected
@@ -85,13 +87,13 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             bleManager.isConnected.collect { isConnected ->
                 when (bleManager.currentDeviceType) {
-                    BleManager.DeviceType.PPG -> {
+                    DeviceType.PPG -> {
                         _isPpgConnected.value = isConnected
                         if (!isConnected) {
                             _ppgConnectionLost.value = true
                         }
                     }
-                    BleManager.DeviceType.THERMAL_CAMERA -> {
+                    DeviceType.THERMAL_CAMERA -> {
                         _isCamConnected.value = isConnected
                         if (!isConnected) {
                             _camConnectionLost.value = true
@@ -108,8 +110,8 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             bleManager.connectionLost.collect { isLost ->
                 when (bleManager.currentDeviceType) {
-                    BleManager.DeviceType.PPG -> _ppgConnectionLost.value = isLost
-                    BleManager.DeviceType.THERMAL_CAMERA -> _camConnectionLost.value = isLost
+                    DeviceType.PPG -> _ppgConnectionLost.value = isLost
+                    DeviceType.THERMAL_CAMERA -> _camConnectionLost.value = isLost
                     null -> {}
                 }
             }
@@ -182,22 +184,24 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setWorkoutParameters(
-        zone: Int,
-        zonasList: List<Pair<String, IntRange>>,
-        group: String? = null,
-        user: String,
-        exercise: String
-    ) {
-        Log.d("RealTimeViewModel", "Setting workout parameters -> zone: $zone, group: $group, user: $user, exercise: $exercise")
+    zone: Int,
+    zonasList: List<Pair<String, IntRange>>,
+    group: String? = null,
+    user: String,
+    exercise: String
+) {
+    Log.d("RealTimeViewModel", "setWorkoutParameters chamado com: zone=$zone, group=$group, user=$user, exercise=$exercise")
+    Log.d("RealTimeViewModel", "zonasList=$zonasList")
 
-        _selectedZone.value = zone
-        _zonas.value = zonasList
-        _groupId.value = group
-        _userId.value = user
-        _exerciseId.value = exercise
+    _selectedZone.value = zone
+    _zonas.value = zonasList
+    // Se não houver grupo, groupId será igual ao userId
+    _groupId.value = group ?: user
+    _userId.value = user
+    _exerciseId.value = exercise
 
-        bleManager.setSessionParameters(group, user, exercise, zone, zonasList)
-    }
+    bleManager.setSessionParameters(group, user, exercise, zone, zonasList)
+}
 
     fun prepareForWorkout() {
         viewModelScope.launch(Dispatchers.IO) { // Certifique-se de usar Dispatchers.IO
@@ -222,6 +226,17 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         val ipWithPort = "$ip:$currentPort"
         android.util.Log.d("RealTimeViewModel", "Enviando IP com porta: $ipWithPort")
         bleManager.sendAllConfigs(ssid, password, ipWithPort)
+    }
+
+    fun resetSession() {
+        _selectedZone.value = 1
+        _zonas.value = emptyList()
+        _groupId.value = null
+        _userId.value = "aluno01"
+        _exerciseId.value = "exercicio_teste"
+        _activityStarted.value = false
+        MqttManager.WorkoutSessionManager.resetSession()
+        Log.d("RealTimeViewModel", "Sessão redefinida")
     }
 
     fun getBleManager(): BleManager = bleManager
