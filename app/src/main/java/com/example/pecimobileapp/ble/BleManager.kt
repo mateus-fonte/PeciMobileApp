@@ -22,6 +22,7 @@ import java.io.File
 import java.io.FileWriter
 import java.io.IOException
 import java.util.*
+import kotlin.math.pow
 
 private val HR_SERVICE_UUID        = UUID.fromString("e626a696-36ba-45b3-a444-5c28eb674dd5")
 private val HR_CHAR_UUID           = UUID.fromString("aa4fe3ac-56c4-42c7-856e-500b8d4b1a01")
@@ -173,6 +174,20 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
     @SuppressLint("MissingPermission")
     private fun connect(device: BluetoothDevice) {
+        // Desconectar qualquer conexão existente
+        gatt?.let { existingGatt ->
+            if (existingGatt.device.address != device.address) {
+                Log.d(TAG, """
+                    Desconectando dispositivo anterior:
+                    Endereço anterior: ${existingGatt.device.address}
+                    Novo endereço: ${device.address}
+                """.trimIndent())
+                existingGatt.disconnect()
+                existingGatt.close()
+                gatt = null
+            }
+        }
+        
         lastDevice = device
         retryCount = 0
         _connectionLost.value = false
@@ -252,32 +267,25 @@ fun connectCam(device: BluetoothDevice) {
     Log.d(TAG, "Câmera térmica conectada com sucesso: ${device.address}")
 }
     
+    private var maxRetryAttempts = 3
+
     private fun attemptReconnect() {
-        lastDevice?.let {
-            if (ActivityCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.BLUETOOTH_CONNECT
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                // TODO: Consider calling
-                //    ActivityCompat#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for ActivityCompat#requestPermissions for more details.
-                return
-            }
-            Log.d(TAG, "Tentando reconectar ao dispositivo: ${it.name ?: it.address}")
-            updateLastCommunicationTime()
-            if (retryCount < maxRetries) {
-                retryCount++
-                Handler(Looper.getMainLooper()).postDelayed({ connect(it) }, retryDelayMs)
-            } else {
-                _connectionLost.value = true
-                stopConnectionCheck()
-                Log.e(TAG, "Falha ao reconectar após $maxRetries tentativas")
-            }
+        if (retryCount < maxRetryAttempts) {
+            retryCount++
+            val delayMs = (1000L * (2.0.pow(retryCount - 1))).toLong() // Exponential backoff
+            Log.d(TAG, "Tentativa de reconexão $retryCount de $maxRetryAttempts em ${delayMs}ms")
+            
+            Handler(Looper.getMainLooper()).postDelayed({
+                lastDevice?.let { device ->
+                    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                        Log.d(TAG, "Iniciando tentativa de reconexão $retryCount")
+                        connect(device)
+                    }
+                }
+            }, delayMs)
+        } else {
+            Log.e(TAG, "Máximo de tentativas de reconexão atingido")
+            _connectionLost.value = true
         }
     }
 
@@ -335,9 +343,22 @@ fun connectCam(device: BluetoothDevice) {
     // Atualizar timestamp da última comunicação
     private fun updateLastCommunicationTime() {
         lastCommunicationTime = System.currentTimeMillis()
-    }    @SuppressLint("MissingPermission")
+    }    
+
+    @SuppressLint("MissingPermission")
     override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
         val deviceInfo = "${g.device.name ?: g.device.address} (${currentDeviceType ?: "Unknown Type"})"
+
+        // Map de status para strings legíveis
+        val statusStr = when (status) {
+            BluetoothGatt.GATT_SUCCESS -> "SUCESSO"
+            133 -> "GATT_ERROR (Possível timeout)"
+            8 -> "GATT_CONN_TIMEOUT"
+            19 -> "GATT_CONN_TERMINATE_PEER_USER"
+            22 -> "GATT_CONN_TERMINATE_LOCAL_HOST"
+            62 -> "GATT_ERROR (Possível falha na conexão)"
+            else -> "DESCONHECIDO ($status)"
+        }
 
         // Map dos estados para strings legíveis
         val stateStr = when (newState) {
@@ -352,7 +373,7 @@ fun connectCam(device: BluetoothDevice) {
             ===== Mudança de Estado BLE =====
             Dispositivo: $deviceInfo
             Estado: $stateStr
-            Status: $status
+            Status: $statusStr
             Desconexão Esperada: $expectingDisconnect
             Tipo: ${currentDeviceType?.name ?: "Unknown"}
             ================================
@@ -361,19 +382,53 @@ fun connectCam(device: BluetoothDevice) {
         when (newState) {
             BluetoothGatt.STATE_DISCONNECTED -> {
                 _connected.value = false
-                // Only emit connectionLost if we aren't expecting the disconnect
+                gatt?.close()
+                gatt = null
+
+                // Handle unexpected disconnections
                 if (!expectingDisconnect) {
                     _connectionLost.value = true
                     Log.w(TAG, "Desconexão inesperada detectada para $deviceInfo")
+                    
+                    // Automatic reconnection for specific status codes
+                    when (status) {
+                        133, 8, 62 -> { // GATT_ERROR (timeout), GATT_CONN_TIMEOUT, or connection failure
+                            Log.d(TAG, "Tentando reconexão automática após erro $statusStr")
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                lastDevice?.let { device ->
+                                    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                                        Log.d(TAG, "Iniciando reconexão para $deviceInfo")
+                                        connect(device)
+                                    }
+                                }
+                            }, 2000) // 2 second delay before reconnecting
+                        }
+                        19, 22 -> { // Terminated by peer or host - don't auto reconnect
+                            Log.d(TAG, "Conexão terminada normalmente: $statusStr")
+                        }
+                    }
                 }
                 // Reset the flag after use
                 expectingDisconnect = false
             }
             BluetoothGatt.STATE_CONNECTED -> {
-                _connected.value = true
-                _connectionLost.value = false
-                // Start discovering services
-                g.discoverServices()
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    _connected.value = true
+                    _connectionLost.value = false
+                    retryCount = 0 // Reset retry count on successful connection
+                    
+                    // Start discovering services
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                            g.discoverServices()
+                        }
+                    }, 600) // Add a small delay before service discovery
+                } else {
+                    Log.e(TAG, "Conexão falhou com status: $statusStr")
+                    g.close()
+                    // Try to reconnect if the connection failed
+                    attemptReconnect()
+                }
             }
         }
     }
@@ -408,9 +463,18 @@ fun connectCam(device: BluetoothDevice) {
         updateLastCommunicationTime()
     }
 
-    // ...existing code...
 @RequiresApi(Build.VERSION_CODES.O)
 override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+    // Verificar se os dados vêm do dispositivo conectado
+    if (g.device.address != lastDevice?.address) {
+        Log.w(TAG, """
+            Ignorando dados de dispositivo não autorizado:
+            Recebido de: ${g.device.address}
+            Dispositivo conectado: ${lastDevice?.address}
+        """.trimIndent())
+        return
+    }
+
     val raw = String(characteristic.value, Charsets.UTF_8)
     updateLastCommunicationTime()
 
@@ -426,7 +490,7 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
 
                 // Extrair todos os dígitos da string
                 val bpmStr = raw.substringAfterLast(".").takeWhile { it.isDigit() }
-                val hr = bpmStr.toIntOrNull()?.takeIf { it in 30..220 }
+                val hr = bpmStr.toIntOrNull()?:0//.takeIf { it in 30..220 }
 
                 // Log detalhado dos valores
                 Log.d(TAG, """
@@ -478,7 +542,6 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
         }
     }
 }
-// ...existing code...
 
         private fun writeNextConfig() {
         if (!_connected.value) {
@@ -614,7 +677,8 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
         try {
             val path = context.getExternalFilesDir(null) ?: context.filesDir
             val file = File(path, "bpm_log.txt")
-            FileWriter(file, true).use { it.append(data).append("\n") }
+            FileWriter(file, true).use { it.append(data).append("\n")
+            }
         } catch (e: IOException) {
             Log.e(TAG, "Erro ao salvar no arquivo", e)
         }

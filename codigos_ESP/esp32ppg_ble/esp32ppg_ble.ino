@@ -20,12 +20,10 @@
 
 #define CONFIG_UUID         "0a3b6985-dad6-4759-8852-dcb266d3a59e"
 #define CONFIG_TIME_UUID    "ca68ebcd-a0e5-4174-896d-15ba005b668e"
-#define CONFIG_ID_UUID      "eee66a40-0189-4dff-9310-b5736f86ee9c"
-#define CONFIG_FREQ_UUID    "e742e008-0366-4ec2-b815-98b814112ddc"
+#define CONFIG_FREQ_UUID    "e742e008-0366-4ec2-b815-98b814112ddc" //característica read/write
 
 BLECharacteristic *bpmChar;
 BLECharacteristic *timeChar;
-BLECharacteristic *idChar;
 BLECharacteristic *freqChar;
 BLEServer *server = nullptr;
 
@@ -37,17 +35,14 @@ DFRobot_Heartrate heartrate(DIGITAL_MODE);
 #define RUNNING 1
 int mode = SETTING;
 
-int delay_millis = 250;
-String sensorID = "";
-float bpm = 0; // reutilizado como BPM
+int delay_millis = 500;
+String sensorID = "PG";
 
 void print_formated_date(DateTime dt) {
-  Serial.print(dt.year(), DEC); Serial.print('/');
-  Serial.print(dt.month(), DEC); Serial.print('/');
-  Serial.print(dt.day(), DEC); Serial.print(" ");
-  Serial.print(dt.hour(), DEC); Serial.print(':');
-  Serial.print(dt.minute(), DEC); Serial.print(':');
-  Serial.println(dt.second(), DEC);
+  Serial.printf("%d/%02d/%02d %02d:%02d:%02d\n", 
+    dt.year(), dt.month(), dt.day(),
+    dt.hour(), dt.minute(), dt.second()
+  );
 }
 
 class serverCallbacks : public BLEServerCallbacks {
@@ -55,11 +50,14 @@ class serverCallbacks : public BLEServerCallbacks {
     Serial.println("[BLE] Cliente conectado");
     server->getAdvertising()->stop();  // Para o advertising para evitar novas conexões
     Serial.println("[BLE] Advertising parado.");
+    mode = RUNNING;
+    Serial.println("[System] modo RUNNING");
   }
   void onDisconnect(BLEServer *server) {
     Serial.println("[BLE] Cliente desconectado. Reiniciando advertising.");
     server->getAdvertising()->start();
     mode = SETTING;
+    Serial.println("[System] modo SETTING");
   }
 };
 
@@ -82,34 +80,21 @@ class TimeCallback : public BLECharacteristicCallbacks {
   }
 };
 
-class IdCallback : public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic *pChar) override {
-    String value = pChar->getValue();
-    if (value.length() > 3) {
-      Serial.println("[BLE] ID muito longo.");
-      return;
-    }
-    for (char c : value) {
-      if (!isalnum(c) && c != '+' && c != '/') {
-        Serial.println("[BLE] Caractere inválido para base64.");
-        idChar->setValue("Error: invalid id base64");
-        return;
-      }
-    }
-    sensorID = value;
-    Serial.print("[BLE] sensorID aceito: ");
-    Serial.println(sensorID);
-  }
-};
-
 class FreqCallback : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pChar) override {
-    String value = pChar->getValue();
-    int freq = value.toInt();
-    if (freq > 0) {
-      delay_millis = freq;
-      Serial.print("[BLE] Nova frequência: ");
-      Serial.println(delay_millis);
+    String raw = pChar->getValue();
+    raw.trim();
+    uint32_t val = strtoul(raw.c_str(), NULL, 10);
+    Serial.print("[BLE] Frequencia Recebida: ");
+    Serial.println(val);
+    if (val >= 200 && val <= 2000) {
+      Serial.print("[System] Frequencia ajudata para: ");
+      Serial.print(val);
+      Serial.println(" ms de delay");
+      delay_millis = val;
+    } else {
+      Serial.println("[Erro] Valor de frequencia inválida. ");
+      timeChar->setValue("Error: invalid freq");
     }
   }
 };
@@ -122,23 +107,25 @@ int setup_rtc() {
     delay(20);
   }
   Serial.println("\n[RTC] RTC encontrado");
+  
+  // Ajusta para a hora da compilação
+  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  
   Serial.print("[RTC] Data/hora atual: ");
   print_formated_date(rtc.now());
   return 1;
 }
 
 void setup_ble() {
-  BLEDevice::init("ESP32_PPG");
+  BLEDevice::init("ESP32_PPG_Heart_Box");
   server = BLEDevice::createServer();
   server->setCallbacks(new serverCallbacks());
 
   // Serviço de configuração
   BLEService *configService = server->createService(CONFIG_UUID);
   timeChar = configService->createCharacteristic(CONFIG_TIME_UUID, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_READ);
-  idChar   = configService->createCharacteristic(CONFIG_ID_UUID, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_READ);
   freqChar = configService->createCharacteristic(CONFIG_FREQ_UUID, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_READ);
   timeChar->setCallbacks(new TimeCallback());
-  idChar->setCallbacks(new IdCallback());
   freqChar->setCallbacks(new FreqCallback());
   configService->start();
 
@@ -151,6 +138,7 @@ void setup_ble() {
   // Configuração do advertising
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SENSOR_UUID);
+  pAdvertising->addServiceUUID(CONFIG_UUID);
   pAdvertising->setScanResponse(true);
   
   server->getAdvertising()->start();
@@ -158,19 +146,22 @@ void setup_ble() {
 }
 
 int setup_sensor() {
+  //verificação
   heartrate.getValue(HEARTRATE_PIN);
+  heartrate.getRate(); //?
   Serial.println("[PPG] Sensor iniciado");
   return 1;
 }
 
+//declarar aqui variável global do valor do sensor
+uint8_t bpm;
 int get_sensor_data() {
   heartrate.getValue(HEARTRATE_PIN);
-  uint8_t bpm = heartrate.getRate();
+  bpm = heartrate.getRate();
   if (bpm == 0) {
-    Serial.println("[PPG] Nenhum batimento detectado");
-    return 0;
+    Serial.println("[PPG] Nenhum batimento detectado"); //imprime para log
+    //return 0; //tirei isso pq assim manda esse zero por ble e funciona pra manter a conexão ativa
   }
-  bpm = bpm;
   Serial.print("[PPG] BPM: ");
   Serial.println(bpm);
   return 1;
@@ -180,24 +171,17 @@ void setup() {
   Serial.begin(115200);
   delay(50);
   Serial.println("[Sistema] Iniciando...");
-
   setup_rtc();
   setup_sensor();
   setup_ble();
 }
 
 void loop() {
-  if (mode == SETTING) {
-    if (sensorID != "") {
-      mode = RUNNING;
-    }
-  }
-
   if (mode == RUNNING) {
     if (get_sensor_data()) {
       uint32_t timestamp = rtc.now().unixtime();
       String ts = String(timestamp) + String(millis() % 1000);
-      String payload = sensorID + ts + String((int)bpm);
+      String payload = sensorID + ts + String(bpm);
       Serial.print("[BLE] Enviando: ");
       Serial.println(payload);
       bpmChar->setValue(payload.c_str());
