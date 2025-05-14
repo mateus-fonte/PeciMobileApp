@@ -15,8 +15,11 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
+
     private val blePpg = BleManager(app)
     private val bleCam = BleManager(app)
+
+    val bleManager: BleManager get() = bleCam // ✅ exposto publicamente
 
     private val wsService = WebSocketServerService(app)
 
@@ -41,9 +44,9 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         emit(wsService.getDeviceIpAddress())
     }.stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
-    // Zona selecionada e faixas de zona
     private val _selectedZone = MutableStateFlow(1)
     val selectedZone: StateFlow<Int> = _selectedZone
+
     private val _zonas = MutableStateFlow<List<Pair<String, IntRange>>>(emptyList())
     val zonas: StateFlow<List<Pair<String, IntRange>>> = _zonas
 
@@ -54,12 +57,10 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
             val idx = zonasList.indexOfFirst { hr in it.second }
             if (idx >= 0) idx + 1 else 0
         }
-        Log.d("RealTimeViewModel", "Zona atual: $zona") // Adiciona o log
+        Log.d("RealTimeViewModel", "Zona atual: $zona")
         zona
     }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
-
-    // Adicionados para persistência de contexto da sessão
     private val _groupId = MutableStateFlow<String?>(null)
     val groupId: StateFlow<String?> = _groupId
 
@@ -97,7 +98,6 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         bleCam.stopActivity()
     }
 
-
     fun setWorkoutParameters(
         zone: Int,
         zonasList: List<Pair<String, IntRange>>,
@@ -126,7 +126,7 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
     fun disconnectCam() = viewModelScope.launch { bleCam.disconnect() }
 
     fun prepareForWorkout() {
-        viewModelScope.launch(Dispatchers.IO) { // Certifique-se de usar Dispatchers.IO
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 blePpg.startActivity()
                 bleCam.startActivity()
@@ -143,13 +143,9 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         password: String
     ) = viewModelScope.launch {
         val ip = accessPointIp.value
-        // Using default port 8080 since we don't have access to WebSocketViewModel
         val currentPort = 8080
-        // Use port with IP address
         val ipWithPort = "$ip:$currentPort"
-        android.util.Log.d("RealTimeViewModel", "Enviando IP com porta: $ipWithPort")
+        Log.d("RealTimeViewModel", "Enviando IP com porta: $ipWithPort")
         bleCam.sendAllConfigs(ssid, password, ipWithPort)
     }
-
-    fun getBleManager(): BleManager = bleCam
 }

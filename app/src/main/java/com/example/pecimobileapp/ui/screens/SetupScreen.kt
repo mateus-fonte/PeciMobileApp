@@ -367,7 +367,7 @@ fun SetupScreen(
                         onAdvancedOptions = { ssid, password, device ->
                             android.util.Log.d("SetupScreen", "CALLBACK ACIONADO - Configurando WiFi: SSID=$ssid")
                             
-                            val bleManager = viewModel.getBleManager()
+                            val bleManager = viewModel.bleManager
                             if (bleManager != null) {
                                 wsViewModel.configureEsp32AndStartServer(
                                     bleManager = bleManager,
@@ -479,7 +479,7 @@ fun SetupScreen(
                         Button(
                             onClick = {
                                 // Tentar configurar novamente com os mesmos parâmetros
-                                val bleManager = viewModel.getBleManager()
+                                val bleManager = viewModel.bleManager
                                 if (bleManager != null) {
                                     // Exibe diálogo para inserir SSID e senha novamente
                                     wsViewModel.prepareRetry()
