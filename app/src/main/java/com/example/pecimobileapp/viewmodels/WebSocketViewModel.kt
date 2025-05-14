@@ -22,6 +22,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.isActive
 import com.example.pecimobileapp.ble.BleManager
 import com.example.pecimobileapp.ble.BleManagerProvider
+import com.example.pecimobileapp.ble.DeviceType
 
 /**
  * ViewModel para gerenciar o servidor WebSocket e os dados recebidos
@@ -164,7 +165,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 // Registrar no BleManagerProvider
                 BleManagerProvider.getInstance().registerConnectedDevice(
                     device, 
-                    BleManagerProvider.DeviceType.THERMAL_CAMERA
+                    DeviceType.THERMAL_CAMERA
                 )
                 
                 android.util.Log.d(TAG, "Dispositivo da câmera térmica armazenado em SharedPreferences: $deviceName ($deviceAddress)")
@@ -184,7 +185,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
      */
     fun getThermalCameraDevice(): BluetoothDevice? {
         // 1. Primeiro, tenta obter do BleManagerProvider (a fonte mais confiável)
-        val providerDevice = BleManagerProvider.getInstance().getConnectedDevice(BleManagerProvider.DeviceType.THERMAL_CAMERA)
+        val providerDevice = BleManagerProvider.getInstance().getConnectedDevice(DeviceType.THERMAL_CAMERA)
         if (providerDevice != null) {
             // Atualiza a referência interna para manter consistência
             _lastConnectedThermalCamera = providerDevice
@@ -200,7 +201,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         if (bleManager.isConnected.value) {
             try {
                 val currentType = bleManager.currentDeviceType
-                if (currentType == BleManager.DeviceType.THERMAL_CAMERA) {
+                if (currentType == DeviceType.THERMAL_CAMERA) {
                     val field = BleManager::class.java.getDeclaredField("lastDevice")
                     field.isAccessible = true
                     _lastConnectedThermalCamera = field.get(bleManager) as? BluetoothDevice
@@ -208,7 +209,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                         // Registra no provider para consistência futura
                         BleManagerProvider.getInstance().registerConnectedDevice(
                             _lastConnectedThermalCamera!!,
-                            BleManagerProvider.DeviceType.THERMAL_CAMERA
+                            DeviceType.THERMAL_CAMERA
                         )
                         return _lastConnectedThermalCamera
                     }
@@ -245,7 +246,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                         // Registrar no provider para consistência futura
                         BleManagerProvider.getInstance().registerConnectedDevice(
                             device,
-                            BleManagerProvider.DeviceType.THERMAL_CAMERA
+                            DeviceType.THERMAL_CAMERA
                         )
                         android.util.Log.d(TAG, "Dispositivo reconstruído com sucesso a partir do endereço MAC salvo")
                         return device
@@ -681,7 +682,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
             
             // Verificar tipo de dispositivo
             val deviceType = manager.currentDeviceType
-            if (deviceType != BleManager.DeviceType.THERMAL_CAMERA) {
+            if (deviceType != DeviceType.THERMAL_CAMERA) {
                 Log.e(TAG, "Dispositivo conectado não é uma câmera térmica")
                 _wifiConfigStatus.value = WifiConfigStatus.Failed(
                     "Dispositivo conectado não é uma câmera térmica"
@@ -825,7 +826,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
      * @return true se a tentativa de reconexão foi iniciada, false caso contrário
      */
     fun reconnectThermalCamera(): Boolean {
-        return BleManagerProvider.getInstance().reconnectLastDevice(BleManagerProvider.DeviceType.THERMAL_CAMERA)
+        return BleManagerProvider.getInstance().reconnectLastDevice(DeviceType.THERMAL_CAMERA)
     }
 
     /**

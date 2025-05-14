@@ -1,6 +1,7 @@
 package com.example.pecimobileapp.ble
 
 import android.bluetooth.BluetoothDevice
+import com.example.pecimobileapp.ble.DeviceType
 import android.content.Context
 import java.lang.IllegalStateException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,11 +28,6 @@ class BleManagerProvider private constructor() {
     private val _ppgDevice = MutableStateFlow<BluetoothDevice?>(null)
     val ppgDevice: StateFlow<BluetoothDevice?> = _ppgDevice
     
-    // Enumeração de tipos de dispositivos suportados
-    enum class DeviceType {
-        THERMAL_CAMERA,
-        PPG
-    }
     
     companion object {
         @Volatile
@@ -72,6 +68,11 @@ class BleManagerProvider private constructor() {
      */
     fun registerConnectedDevice(device: BluetoothDevice, type: DeviceType) {
         Log.d(TAG, "Registrando dispositivo ${device.address} como ${type.name}")
+
+        if (type == DeviceType.PPG && _ppgDevice.value != null){
+            Log.d(TAG, "Desconectando dispositivo PPG anterior para conectar ao novo")
+            getBleManager().disconnect()
+        }
         connectedDevices[type] = device
         
         when (type) {

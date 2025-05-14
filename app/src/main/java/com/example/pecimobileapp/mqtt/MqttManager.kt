@@ -106,7 +106,8 @@ fun subscribe(topic: String, onMessageReceived: (String) -> Unit) {
     }
 }
 
-    @RequiresApi(Build.VERSION_CODES.O)
+// ...existing code...
+@RequiresApi(Build.VERSION_CODES.O)
 fun publishSensorData(
     groupId: String,
     userId: String,
@@ -114,34 +115,43 @@ fun publishSensorData(
     source: String,
     value: Number,
     selectedZone: Int,
-    zonas: List<Pair<String, IntRange>>
+    zonas: List<Pair<String, IntRange>>,
+    rating: Float? = null // Adicionado
 ) {
     CoroutineScope(Dispatchers.IO).launch {
-        Log.d("MqttManager", "Publishing data -> groupId: $groupId, userId: $userId, exerciseId: $exerciseId, source: $source, value: $value, selectedZone: $selectedZone")
-
         connect()
         val timestamp = Instant.now().toEpochMilli()
 
-        val sensorPayload = JSONObject().apply {
+        // Payload para /user/{userId}/data
+        val userPayload = JSONObject().apply {
+            put("value", value.toDouble())
+            put("source", source)
+            put("user_uid", userId)
             put("group_id", groupId)
             put("exercise_id", exerciseId)
+        }
+
+        // Payload para /group/{groupId}/data (rating)
+        val groupPayload = JSONObject().apply {
+            put("rating", (rating ?: 0f).toDouble())
             put("user_uid", userId)
-            put("source", source)
-            put("value", value.toDouble())
-            put("timestamp", timestamp)
+            put("group_id", groupId)
+            put("exercise_id", exerciseId)
         }
 
         val topicGroup = "/group/$groupId/data"
         val topicUser = "/user/$userId/data"
 
         try {
-            publish(topicUser, sensorPayload.toString())
-            publish(topicGroup, sensorPayload.toString())
+            publish(topicUser, userPayload.toString())
+            publish(topicGroup, groupPayload.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao publicar MQTT", e)
         }
     }
 }
+// ...existing code...
+  
 
     @RequiresApi(Build.VERSION_CODES.O)
     object WorkoutSessionManager {

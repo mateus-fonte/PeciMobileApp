@@ -7,6 +7,7 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.pm.PackageManager
+import com.example.pecimobileapp.ble.DeviceType
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -41,11 +42,6 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
 
     private val TAG = "BleManager"
 
-    // Enum para identificar tipo de dispositivo
-    enum class DeviceType {
-        PPG,
-        THERMAL_CAMERA
-    }
 
     // Manter registro do tipo de dispositivo atual
     var currentDeviceType: DeviceType? = null
@@ -82,6 +78,10 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private val _configProgress = MutableStateFlow(0f)
     val configProgress: StateFlow<Float> = _configProgress
 
+    private val _desempenhoPct = MutableStateFlow(0f)
+    val desempenhoPct: StateFlow<Float> = _desempenhoPct
+
+
     private val totalConfigSteps = 5
     private val writeQueue = ArrayDeque<Pair<UUID, ByteArray>>()
     private var lastDevice: BluetoothDevice? = null
@@ -115,23 +115,29 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private var exerciseId: String = "exercicio_teste"
     private var selectedZone: Int = 1
     private var zonas: List<Pair<String, IntRange>> = emptyList()
+    private var tempoTotal = 0
+    private var tempoNaZonaAlvo = 0
 
     fun setSessionParameters(
-        group: String?,
-        user: String,
-        exercise: String,
-        selectedZone: Int,
-        zonasList: List<Pair<String, IntRange>>
-    ) {
-        this.groupId = group ?: "individual"
-        this.userId = user
-        this.exerciseId = exercise
-        this.selectedZone = selectedZone
-        this.zonas = zonasList
-    }
+    group: String?,
+    user: String,
+    exercise: String,
+    selectedZone: Int,
+    zonasList: List<Pair<String, IntRange>>
+) {
+    // Se não houver grupo, use o userId como groupId para tópicos individuais
+    this.groupId = group ?: user
+    this.userId = user
+    this.exerciseId = exercise
+    this.selectedZone = selectedZone
+    this.zonas = zonasList
+}
 
     fun startActivity() {
         activityStarted = true
+        tempoTotal = 0
+        tempoNaZonaAlvo = 0
+        MqttManager.WorkoutSessionManager.resetSession()
         Log.d(TAG, "Atividade iniciada: envio de dados via MQTT liberado")
     }
 
@@ -181,58 +187,72 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         // Iniciar verificação periódica de conexão
         startConnectionCheck()
         updateLastCommunicationTime()
-    }    @SuppressLint("MissingPermission")
-    fun connectPpg(device: BluetoothDevice) {
-        Log.d(TAG, """
-            ===== Conectando PPG =====
-            Nome: ${device.name ?: "N/A"}
-            Endereço: ${device.address}
-            Tipo: ${device.type}
-            Estado atual: ${if (_connected.value) "Conectado" else "Desconectado"}
-            ====================
-        """.trimIndent())
+    }    
 
-        currentDeviceType = DeviceType.PPG
-        connect(device)
-        // Registrar o dispositivo no provider
-        BleManagerProvider.getInstance().registerConnectedDevice(device, BleManagerProvider.DeviceType.PPG)
+    @SuppressLint("MissingPermission")
+fun connectPpg(device: BluetoothDevice) {
+    Log.d(TAG, """
+        ===== Conectando PPG =====
+        Nome: ${device.name ?: "N/A"}
+        Endereço: ${device.address}
+        Tipo: ${device.type}
+        Estado atual: ${if (_connected.value) "Conectado" else "Desconectado"}
+        ====================
+    """.trimIndent())
+
+    // Desconectar dispositivo PPG anterior, se necessário
+    BleManagerProvider.getInstance().getConnectedDevice(DeviceType.PPG)?.let {
+        Log.d(TAG, "Desconectando dispositivo PPG anterior: ${it.address}")
+        disconnect()
     }
 
-    fun connectCam(device: BluetoothDevice) {
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return
-        }
-        if (ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.BLUETOOTH_CONNECT
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return
-        }
-        Log.d(TAG, "Conectando à câmera térmica: ${device.name ?: device.address}")
-        currentDeviceType = DeviceType.THERMAL_CAMERA
-        connect(device)
-        // Registrar o dispositivo no provider
-        BleManagerProvider.getInstance().registerConnectedDevice(device, BleManagerProvider.DeviceType.THERMAL_CAMERA)
-    }    private fun attemptReconnect() {
+    currentDeviceType = DeviceType.PPG
+    connect(device)
+
+    // Registrar o dispositivo no provider
+    BleManagerProvider.getInstance().registerConnectedDevice(device, DeviceType.PPG)
+}
+
+    @SuppressLint("MissingPermission")
+fun connectCam(device: BluetoothDevice) {
+    Log.d(TAG, """
+        ===== Conectando à Câmera Térmica =====
+        Nome: ${device.name ?: "N/A"}
+        Endereço: ${device.address}
+        Tipo: ${device.type}
+        Estado atual: ${if (_connected.value) "Conectado" else "Desconectado"}
+        ====================
+    """.trimIndent())
+
+    // Verificar permissões BLE
+    if (ActivityCompat.checkSelfPermission(
+            context,
+            Manifest.permission.BLUETOOTH_CONNECT
+        ) != PackageManager.PERMISSION_GRANTED
+    ) {
+        Log.e(TAG, "Permissão BLUETOOTH_CONNECT não concedida. Não é possível conectar.")
+        return
+    }
+
+    // Desconectar dispositivo anterior do mesmo tipo, se necessário
+    BleManagerProvider.getInstance().getConnectedDevice(DeviceType.THERMAL_CAMERA)?.let {
+        Log.d(TAG, "Desconectando câmera térmica anterior: ${it.address}")
+        disconnect()
+    }
+
+    // Atualizar o tipo de dispositivo atual
+    currentDeviceType = DeviceType.THERMAL_CAMERA
+
+    // Iniciar conexão com o dispositivo
+    connect(device)
+
+    // Registrar o dispositivo no BleManagerProvider
+    BleManagerProvider.getInstance().registerConnectedDevice(device, DeviceType.THERMAL_CAMERA)
+
+    Log.d(TAG, "Câmera térmica conectada com sucesso: ${device.address}")
+}
+    
+    private fun attemptReconnect() {
         lastDevice?.let {
             if (ActivityCompat.checkSelfPermission(
                     context,
@@ -388,17 +408,19 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         updateLastCommunicationTime()
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
-    override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-        val raw = String(characteristic.value, Charsets.UTF_8)
-        updateLastCommunicationTime()
+    // ...existing code...
+@RequiresApi(Build.VERSION_CODES.O)
+override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+    val raw = String(characteristic.value, Charsets.UTF_8)
+    updateLastCommunicationTime()
 
-        if (!activityStarted) {
-            Log.d(TAG, "Dados recebidos, mas atividade ainda não começou. Ignorando envio MQTT.")
-            return
-        }
+    if (!activityStarted) {
+        Log.d(TAG, "Dados recebidos, mas atividade ainda não começou. Ignorando envio MQTT.")
+        return
+    }
 
-        when (characteristic.uuid) {              HR_CHAR_UUID -> {
+    when (characteristic.uuid) {
+        HR_CHAR_UUID -> {
             if (currentDeviceType == DeviceType.PPG) {
                 Log.d(TAG, "Dados PPG recebidos (raw): $raw")
 
@@ -419,32 +441,46 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
                     _ppgHeartRate.value = it
                     Log.d(TAG, "Atualizando BPM: $it")
                     saveToFile(raw)
-                    Log.d(TAG, "Publicando BPM: $it (Usuário: $userId, Exercício: $exerciseId, Zona: $selectedZone)")
-                    MqttManager.publishSensorData(groupId, userId, exerciseId, "ppg", it, selectedZone, zonas)
+                    // --- NOVO: cálculo do rating (porcentagem de tempo na zona alvo) ---
+                    tempoTotal++
+                    if (selectedZone > 0 && it in (zonas.getOrNull(selectedZone - 1)?.second ?: 0..0)) {
+                        tempoNaZonaAlvo++
+                    }
+                    _desempenhoPct.value = if (tempoTotal > 0) (tempoNaZonaAlvo.toFloat() / tempoTotal) * 100f else 0f
+                    Log.d(TAG, "Cálculo de desempenho: tempoTotal=$tempoTotal, tempoNaZonaAlvo=$tempoNaZonaAlvo, desempenhoPct=$desempenhoPct")
+                    // --- FIM NOVO ---
+
+                    Log.d(TAG, "Publicando BPM: $it (Usuário: $userId, Exercício: $exerciseId, Zona: $selectedZone, Rating: $desempenhoPct)")
+                    MqttManager.publishSensorData(
+                        groupId, userId, exerciseId, "ppg", it, selectedZone, zonas, _desempenhoPct.value
+                    )
                 }
             } else {
                 Log.w(TAG, "Ignorando dados PPG de dispositivo incorreto (DeviceType: ${currentDeviceType})")
             }
         }
 
-            SENSOR_DATA1_UUID, SENSOR_DATA2_UUID, SENSOR_DATA3_UUID -> {
-                if (currentDeviceType == DeviceType.THERMAL_CAMERA) {
-                    Log.d(TAG, "Recebendo dados de temperatura da câmera térmica")
-                    val temp = raw.substringAfter('.', "0").filter(Char::isDigit).toIntOrNull()?.div(100f) ?: 0f
-                    val source = when (characteristic.uuid) {
-                        SENSOR_DATA1_UUID -> { _avgTemp.value = temp; "avg_temp" }
-                        SENSOR_DATA2_UUID -> { _maxTemp.value = temp; "max_temp" }
-                        SENSOR_DATA3_UUID -> { _minTemp.value = temp; "min_temp" }
-                        else -> "unknown"
-                    }
-                    saveToFile(raw)
-                    MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp, selectedZone, zonas)
-                } else {
-                    Log.d(TAG, "Ignorando dados de temperatura de dispositivo não câmera")
+        SENSOR_DATA1_UUID, SENSOR_DATA2_UUID, SENSOR_DATA3_UUID -> {
+            if (currentDeviceType == DeviceType.THERMAL_CAMERA) {
+                Log.d(TAG, "Recebendo dados de temperatura da câmera térmica")
+                val temp = raw.substringAfter('.', "0").filter(Char::isDigit).toIntOrNull()?.div(100f) ?: 0f
+                val source = when (characteristic.uuid) {
+                    SENSOR_DATA1_UUID -> { _avgTemp.value = temp; "avg_temp" }
+                    SENSOR_DATA2_UUID -> { _maxTemp.value = temp; "max_temp" }
+                    SENSOR_DATA3_UUID -> { _minTemp.value = temp; "min_temp" }
+                    else -> "unknown"
                 }
+                saveToFile(raw)
+                MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp, selectedZone, zonas)
+            } else {
+                Log.d(TAG, "Ignorando dados de temperatura de dispositivo não câmera")
             }
         }
-    }    private fun writeNextConfig() {
+    }
+}
+// ...existing code...
+
+        private fun writeNextConfig() {
         if (!_connected.value) {
             Log.e(TAG, "Tentativa de escrever config enquanto desconectado")
             _allConfigSent.value = false
@@ -584,26 +620,22 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
         }
     }    @SuppressLint("MissingPermission")
     fun disconnect() {
-        // Atualizar o provider antes de desconectar
-        currentDeviceType?.let {
-            val providerType = when (it) {
-                DeviceType.PPG -> BleManagerProvider.DeviceType.PPG
-                DeviceType.THERMAL_CAMERA -> BleManagerProvider.DeviceType.THERMAL_CAMERA
-            }
-            BleManagerProvider.getInstance().unregisterConnectedDevice(providerType)
-        }
-
-        _connected.value = false
-        stopConnectionCheck()
-        try {
-            gatt?.disconnect()
-            gatt?.close()
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao desconectar", e)
-        } finally {
-            gatt = null
-        }
+    // Atualizar o provider antes de desconectar
+    currentDeviceType?.let {
+        BleManagerProvider.getInstance().unregisterConnectedDevice(it)
     }
+
+    _connected.value = false
+    stopConnectionCheck()
+    try {
+        gatt?.disconnect()
+        gatt?.close()
+    } catch (e: Exception) {
+        Log.e(TAG, "Erro ao desconectar", e)
+    } finally {
+        gatt = null
+    }
+}
 
     /**
      * Encontra uma característica BLE pelo UUID em todos os serviços disponíveis
