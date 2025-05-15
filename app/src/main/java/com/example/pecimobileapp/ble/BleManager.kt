@@ -541,9 +541,8 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
             }
         }
     }
-}
-
-        private fun writeNextConfig() {
+}    @SuppressLint("MissingPermission")
+    private fun writeNextConfig() {
         if (!_connected.value) {
             Log.e(TAG, "Tentativa de escrever config enquanto desconectado")
             _allConfigSent.value = false
@@ -564,7 +563,7 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
         }
 
         val (uuid, data) = writeQueue.first()
-        val characteristic = findCharacteristic(uuid)
+        val characteristic = g.getService(CONFIG_SERVICE_UUID)?.getCharacteristic(uuid)
 
         if (characteristic == null) {
             Log.e(TAG, "Característica não encontrada para UUID: $uuid")
@@ -573,35 +572,42 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
         }
 
         try {
-            characteristic.value = data
-            val success = if (ActivityCompat.checkSelfPermission(
+            // Verificar permissão primeiro
+            if (ActivityCompat.checkSelfPermission(
                     context,
                     Manifest.permission.BLUETOOTH_CONNECT
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
-                false
-            } else {
-                // TODO: Consider calling
-                //    ActivityCompat#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for ActivityCompat#requestPermissions for more details.
+                Log.e(TAG, "Permissão BLUETOOTH_CONNECT não concedida")
+                _allConfigSent.value = false
                 return
             }
-            g.writeCharacteristic(characteristic)
+
+            // Definir valor e tentar escrever
+            characteristic.value = data
+            val success = g.writeCharacteristic(characteristic)
+
             if (!success) {
                 Log.e(TAG, "Falha ao iniciar escrita para característica: $uuid")
                 _allConfigSent.value = false
                 return
             }
-            Log.d(TAG, "Iniciando escrita para característica: $uuid")
+
+            Log.d(TAG, """
+                ===== Escrevendo configuração =====
+                UUID: $uuid
+                Tamanho dos dados: ${data.size} bytes
+                Dados: ${String(data)}
+                ================================
+            """.trimIndent())
+
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao escrever característica: ${e.message}")
             _allConfigSent.value = false
         }
-    }    fun sendAllConfigs(ssid: String, password: String, serverIp: String) {
+    }
+      @SuppressLint("MissingPermission")
+    fun sendAllConfigs(ssid: String, password: String, serverIp: String) {
         if (!_connected.value) {
             Log.e(TAG, "Tentativa de enviar configurações sem conexão BLE ativa")
             return
@@ -617,30 +623,50 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
         _configProgress.value = 0f
         _allConfigSent.value = false
 
-        Log.d(TAG, "Iniciando envio de configurações WiFi")
-        Log.d(TAG, "SSID: $ssid")
-        Log.d(TAG, "Server IP: $serverIp")
+        Log.d(TAG, """
+            ===== Iniciando envio de configurações WiFi =====
+            SSID: $ssid
+            Server IP: $serverIp
+            Tipo de dispositivo: ${currentDeviceType}
+            Estado da conexão: ${if (_connected.value) "Conectado" else "Desconectado"}
+            ==============================================
+        """.trimIndent())
+
+        // Verificar o serviço de configuração
+        val configService = g.getService(CONFIG_SERVICE_UUID)
+        if (configService == null) {
+            Log.e(TAG, "Serviço de configuração não encontrado!")
+            return
+        }
+
+        // Verificar as características
+        val ssidChar = configService.getCharacteristic(CONFIG_SSID_UUID)
+        val passChar = configService.getCharacteristic(CONFIG_PASS_UUID)
+        val ipChar = configService.getCharacteristic(CONFIG_SERVERIP_UUID)
+
+        if (ssidChar == null || passChar == null || ipChar == null) {
+            Log.e(TAG, "Características de configuração não encontradas!")
+            return
+        }
 
         // Set that we're expecting a disconnect after sending configs
         expectingDisconnect = true
         writeQueue.clear()
 
-        // Adiciona configs na ordem correta e com logs
-        writeQueue.addAll(
-            listOf(
-                CONFIG_SSID_UUID to ssid.toByteArray(),
-                CONFIG_PASS_UUID to password.toByteArray(),
-                CONFIG_SERVERIP_UUID to serverIp.toByteArray()
-            )
-        )
+        // Adiciona configs na ordem correta
+        writeQueue.addAll(listOf(
+            CONFIG_SSID_UUID to ssid.toByteArray(),
+            CONFIG_PASS_UUID to password.toByteArray(),
+            CONFIG_SERVERIP_UUID to serverIp.toByteArray()
+        ))
 
         Log.d(TAG, "Fila de configurações preparada com ${writeQueue.size} itens")
 
-        // Pequeno delay antes de iniciar o envio
-        Handler(Looper.getMainLooper()).postDelayed({
-            writeNextConfig()
-        }, 500) // 500ms de delay antes de iniciar
-    }    override fun onCharacteristicWrite(
+        // Iniciar envio imediatamente
+        writeNextConfig()
+    }
+    
+    override fun onCharacteristicWrite(
         gatt: BluetoothGatt,
         characteristic: BluetoothGattCharacteristic,
         status: Int
