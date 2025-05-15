@@ -469,63 +469,6 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         return result
     }
     
-    /**
-     * Prepara a configuração WiFi para o ESP32 usando BLE
-     * Esta função deve ser chamada após a conexão BLE com o ESP32 e após o usuário
-     * fornecer o SSID e senha do Access Point
-     * 
-     * @param bleManager gerenciador BLE para enviar os dados
-     * @param ssid SSID do Access Point
-     * @param password senha do Access Point
-     */
-    fun prepareWifiConfig(bleManager: Any, ssid: String, password: String) = viewModelScope.launch {
-        try {
-            _wifiConfigStatus.value = WifiConfigStatus.Configuring
-            
-            // Verificar se o AP está ativo
-            if (!checkAccessPointStatus()) {
-                _wifiConfigStatus.value = WifiConfigStatus.Failed("Access Point não está ativo")
-                _connectionError.value = "Access Point não está ativo. Ative o hotspot e tente novamente."
-                return@launch
-            }
-            
-            // Obter o IP da interface ap0
-            val ip = getAccessPointIp()
-            if (ip == null) {
-                _wifiConfigStatus.value = WifiConfigStatus.Failed("Não foi possível obter o IP do Access Point")
-                _connectionError.value = "Não foi possível obter o IP do Access Point."
-                return@launch
-            }
-              // Log para debug
-            android.util.Log.d(TAG, "Preparando configuração WiFi: SSID=$ssid, IP=$ip")
-            
-            // Verifica se o bleManager é do tipo correto
-            if (bleManager is com.example.pecimobileapp.ble.BleManager) {
-                bleManager.sendAllConfigs(ssid, password, ip)
-                // O status será atualizado através do Flow configProgress no ViewModel
-            } else {
-                throw IllegalArgumentException("BleManager fornecido não é do tipo correto")
-            }
-            
-            // Aguardar a configuração ser enviada
-            withTimeout(30000) { // 30 segundos de timeout
-                while (!bleManager.allConfigSent.value) {
-                    delay(500)
-                }
-            }
-            
-            _wifiConfigStatus.value = WifiConfigStatus.Configured
-            _connectionError.value = null
-            
-            // Iniciar o servidor WebSocket automaticamente após configurar o WiFi
-            startServerWithApCheck()
-            
-        } catch (e: Exception) {
-            android.util.Log.e(TAG, "Erro ao configurar WiFi", e)
-            _wifiConfigStatus.value = WifiConfigStatus.Failed("Erro: ${e.message}")
-            _connectionError.value = "Erro ao configurar WiFi: ${e.message}"
-        }
-    }
       /**
      * Envia a configuração WiFi para o ESP32 conectado e inicia o servidor WebSocket
      */ 
@@ -548,7 +491,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 return@launch
             }
             
-            // Obter o IP da interface ap0
+            // Obter o IP da interface do access point
             val ip = getAccessPointIp()
             if (ip == null) {
                 _wifiConfigStatus.value = WifiConfigStatus.Failed("Não foi possível obter o IP do Access Point")
@@ -642,7 +585,8 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
      * @param bleManager gerenciador BLE para enviar dados (opcional, se não fornecido usa o interno)
      * @param ssid SSID do Access Point
      * @param password senha do Access Point
-     */      suspend fun configureEsp32AndStartServer(
+     */
+     suspend fun configureEsp32AndStartServer(
         bleManager: com.example.pecimobileapp.ble.BleManager? = null, 
         ssid: String, 
         password: String
