@@ -101,7 +101,7 @@
  unsigned long lastSendTime = 0;     // Última vez que dados foram enviados
  const int sendInterval = 500;       // Intervalo de envio em ms (2Hz = 500ms)
  bool isConnected = false;           // Status da conexão WebSocket
- delay_millis = 500;                // Delay entre leituras do sensor
+ int delay_millis = 500;                // Delay entre leituras do sensor
  
  // Variáveis para reconexão com backoff exponencial
  unsigned long lastReconnectAttempt = 0;
@@ -188,21 +188,21 @@
      Serial.flush();
    }
  };
-class TimeCallback : public BLECharacteristicCallbacks {
+class FreqCallback : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pChar) override {
     String raw = pChar->getValue();
     raw.trim();
-    uint32_t timestamp = strtoul(raw.c_str(), NULL, 10);
-    Serial.print("[BLE] Timestamp recebido: ");
-    Serial.println(timestamp);
-    if (timestamp > MIN_VALID_TIMESTAMP) {
-      DateTime dt(timestamp);
-      rtc.adjust(dt);
-      Serial.print("[RTC] ajustado para: ");
-      print_formated_date(dt);
+    uint32_t val = strtoul(raw.c_str(), NULL, 10);
+    Serial.print("[BLE] Frequencia Recebida: ");
+    Serial.println(val);
+    if (val >= 200 && val <= 2000) {
+      Serial.print("[System] Frequencia ajudata para: ");
+      Serial.print(val);
+      Serial.println(" ms de delay");
+      delay_millis = val;
     } else {
-      Serial.println("[Erro] Timestamp inválido.");
-      timeChar->setValue("Error: invalid timestamp");
+      Serial.println("[Erro] Valor de frequencia inválida. ");
+      timeChar->setValue("Error: invalid freq");
     }
   }
 };
