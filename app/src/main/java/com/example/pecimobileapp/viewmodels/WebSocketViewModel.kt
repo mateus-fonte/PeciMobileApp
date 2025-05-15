@@ -496,13 +496,23 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 _connectionError.value = "Não foi possível obter o IP do Access Point."
                 return@launch
             }
-            
-            // Log para debug
+              // Log para debug
             android.util.Log.d(TAG, "Preparando configuração WiFi: SSID=$ssid, IP=$ip")
             
-            // Aqui você usaria o bleManager para enviar os dados via BLE
-            // Por exemplo: bleManager.sendWifiConfig(ssid, password, ip)
-            // Como este código é intermediário, vamos apenas simular o sucesso
+            // Verifica se o bleManager é do tipo correto
+            if (bleManager is com.example.pecimobileapp.ble.BleManager) {
+                bleManager.sendAllConfigs(ssid, password, ip)
+                // O status será atualizado através do Flow configProgress no ViewModel
+            } else {
+                throw IllegalArgumentException("BleManager fornecido não é do tipo correto")
+            }
+            
+            // Aguardar a configuração ser enviada
+            withTimeout(30000) { // 30 segundos de timeout
+                while (!bleManager.allConfigSent.value) {
+                    delay(500)
+                }
+            }
             
             _wifiConfigStatus.value = WifiConfigStatus.Configured
             _connectionError.value = null
