@@ -97,10 +97,11 @@
  const char* serverPath = "/";       // Caminho do WebSocket
  
  // Variáveis de controle
- int mode = RUNNING_BLE;   // inicializa no modo ble
+ int mode = RUNNING_BLE;              // inicializa no modo ble
  unsigned long lastSendTime = 0;     // Última vez que dados foram enviados
  const int sendInterval = 500;       // Intervalo de envio em ms (2Hz = 500ms)
  bool isConnected = false;           // Status da conexão WebSocket
+ delay_millis = 500;                // Delay entre leituras do sensor
  
  // Variáveis para reconexão com backoff exponencial
  unsigned long lastReconnectAttempt = 0;
@@ -187,14 +188,24 @@
      Serial.flush();
    }
  };
- class FreqCallback : public BLECharacteristicCallbacks {
-   void onWrite(BLECharacteristic *pChar) override {
-     String value = pChar->getValue();
-     Serial.print("[BLE] Freq recebido: ");
-     Serial.println(value);
-     Serial.flush();
-   }
- };
+class TimeCallback : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic *pChar) override {
+    String raw = pChar->getValue();
+    raw.trim();
+    uint32_t timestamp = strtoul(raw.c_str(), NULL, 10);
+    Serial.print("[BLE] Timestamp recebido: ");
+    Serial.println(timestamp);
+    if (timestamp > MIN_VALID_TIMESTAMP) {
+      DateTime dt(timestamp);
+      rtc.adjust(dt);
+      Serial.print("[RTC] ajustado para: ");
+      print_formated_date(dt);
+    } else {
+      Serial.println("[Erro] Timestamp inválido.");
+      timeChar->setValue("Error: invalid timestamp");
+    }
+  }
+};
  class SSIDCallback : public BLECharacteristicCallbacks {
    void onWrite(BLECharacteristic *pChar) override {
      String value = pChar->getValue();
@@ -877,6 +888,6 @@ void loop() {
     }
   }
   
-  // Usar delay de 500ms para manter frequência de 2Hz
-  delay(500);
+
+  delay(delay_millis);
 }
