@@ -106,7 +106,6 @@ fun subscribe(topic: String, onMessageReceived: (String) -> Unit) {
     }
 }
 
-// ...existing code...
 @RequiresApi(Build.VERSION_CODES.O)
 fun publishSensorData(
     groupId: String,
@@ -116,7 +115,8 @@ fun publishSensorData(
     value: Number,
     selectedZone: Int,
     zonas: List<Pair<String, IntRange>>,
-    rating: Float? = null // Adicionado
+    rating: Float? = null, // Adicionado
+    nome: String? = null // Novo parâmetro opcional
 ) {
     CoroutineScope(Dispatchers.IO).launch {
         connect()
@@ -129,6 +129,8 @@ fun publishSensorData(
             put("user_uid", userId)
             put("group_id", groupId)
             put("exercise_id", exerciseId)
+            put("zona_alvo", selectedZone)
+            put("nome", nome)
         }
 
         // Payload para /group/{groupId}/data (rating)
@@ -137,6 +139,7 @@ fun publishSensorData(
             put("user_uid", userId)
             put("group_id", groupId)
             put("exercise_id", exerciseId)
+            put("zona_alvo", selectedZone) // Adiciona a zona alvo ao payload do grupo
         }
 
         val topicGroup = "/group/$groupId/data"
@@ -150,8 +153,6 @@ fun publishSensorData(
         }
     }
 }
-// ...existing code...
-  
 
     @RequiresApi(Build.VERSION_CODES.O)
     object WorkoutSessionManager {

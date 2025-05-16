@@ -1,5 +1,6 @@
 package com.example.pecimobileapp.ui.screens
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.util.Log
 import androidx.activity.compose.BackHandler
@@ -63,6 +64,7 @@ fun PulsatingHeart(modifier: Modifier = Modifier) {
     )
 }
 
+@SuppressLint("StateFlowValueCalledInComposition")
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun WorkoutScreen(
@@ -74,8 +76,11 @@ fun WorkoutScreen(
     wsViewModel: WebSocketViewModel,
     userId: String,
     exerciseId: String,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    profileViewModel: com.example.pecimobileapp.ui.ProfileViewModel // novo parâmetro
 ) {
+    val nome = profileViewModel.nome
+    val nomeParticipante = profileViewModel.nome
     Log.d("WorkoutScreen", "Parâmetros recebidos: selectedZone=$selectedZone, groupId=$groupId, userId=$userId, exerciseId=$exerciseId")
     Log.d("WorkoutScreen", "RealTimeViewModel zonas=${realTimeViewModel.zonas.value}")
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
@@ -119,6 +124,19 @@ fun WorkoutScreen(
         Log.d("WorkoutScreen", "Chamando startActivity")
         realTimeViewModel.startActivity()
         Log.d("WorkoutScreen", "Treino iniciado com sucesso")
+        // Publica zonaAlvo e nomeParticipante via MQTT
+        mqttManager?.let {
+            val nomeToSend = nomeParticipante
+            val zonaAlvoToSend = selectedZone
+            val topic = if (groupId != null) "/group/$groupId/data" else "/user/$userId/data"
+            val payload = org.json.JSONObject().apply {
+                put("user_uid", userId)
+                put("zona_alvo", zonaAlvoToSend)
+                put("nome", nomeToSend)
+                put("exercise_id", "session-${System.currentTimeMillis()}")
+            }
+            it.publish(topic, payload.toString())
+        }
     } catch (e: Exception) {
         Log.e("WorkoutScreen", "Erro ao iniciar treino", e)
     }
@@ -133,6 +151,23 @@ fun WorkoutScreen(
         }
     }
 
+    // Envio periódico via MQTT a cada 10 segundos
+    LaunchedEffect(isRunning) {
+        while (isRunning) {
+            delay(10_000L)
+            mqttManager?.let {
+                val topic = if (groupId != null) "/group/$groupId/data" else "/user/$userId/data"
+                val payload = org.json.JSONObject().apply {
+                    put("user_uid", userId)
+                    put("zona_alvo", selectedZone)
+                    put("nome", nomeParticipante)
+                    put("exercise_id", exerciseId)
+                    put("hr", hr ?: JSONObject.NULL)
+                }
+                it.publish(topic, payload.toString())
+            }
+        }
+    }
 
     LaunchedEffect(groupId, userId) {
     // Só faz subscribe se estiver em grupo de verdade
@@ -144,6 +179,14 @@ fun WorkoutScreen(
                     val uid = json.getString("user_uid")
                     val rating = json.getDouble("rating").toFloat()
                     outrosParticipantes[uid] = rating
+                }
+                // Atualiza zonaAlvo e nomeParticipante dos outros participantes
+                if (json.has("zona_alvo") && json.has("nome")) {
+                    val uid = json.optString("user_uid", "")
+                    val zonaAlvoOutro = json.getInt("zona_alvo")
+                    val nomeOutro = json.getString("nome")
+                    // Você pode armazenar ou exibir essas informações conforme necessário
+                    Log.d("WorkoutScreen", "Participante: $nomeOutro (uid=$uid) está na zona $zonaAlvoOutro")
                 }
             } catch (_: Exception) {}
         }
@@ -287,13 +330,14 @@ fun WorkoutScreen(
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
+            // Slider do usuário principal
             Slider(
                 value = desempenhoPct.coerceIn(0f, 100f),
                 onValueChange = {},
                 enabled = false,
                 valueRange = 0f..100f,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .padding(horizontal = 8.dp),
                 colors = SliderDefaults.colors(
                     thumbColor = Color.White,
@@ -305,59 +349,82 @@ fun WorkoutScreen(
                 )
             )
         }
-
-
-        // ...existing code...
-if (groupId != null) {
-    Spacer(Modifier.height(16.dp))
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
-            Spacer(Modifier.height(4.dp))
-            Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(Modifier.height(8.dp))
-
-            // Junta o próprio usuário e os outros participantes
-            val allParticipants = buildMap {
-                put(userId, desempenhoPct)
-                putAll(outrosParticipantes)
-            }
-            allParticipants.entries.sortedByDescending { it.value }.forEach { (uid, pct) ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        // Espaço entre o slider do usuário e o grupo
+        if (groupId != null) {
+            Spacer(Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(uid, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
-                    Slider(
-                        value = pct.coerceIn(0f, 100f),
-                        onValueChange = {},
-                        enabled = false,
-                        valueRange = 0f..100f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = zoneColor,
-                            inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text("${pct.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+                    Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(Modifier.height(8.dp))
+
+                    val participantesGrupo = remember { mutableStateMapOf<String, Int>() }
+                    // Atualiza participantesGrupo ao receber mensagens MQTT
+                    LaunchedEffect(Unit) {
+                        if (groupId != null && groupId != userId && mqttManager != null) {
+                            mqttManager.subscribe("/group/$groupId/data") { raw ->
+                                try {
+                                    val json = org.json.JSONObject(raw)
+                                    if (json.has("zona_alvo") && json.has("nome")) {
+                                        val uid = json.optString("user_uid", "")
+                                        val zonaAlvoOutro = json.getInt("zona_alvo")
+                                        val nomeOutro = json.getString("nome")
+                                        if (uid != userId) {
+                                            participantesGrupo[nomeOutro] = zonaAlvoOutro
+                                        }
+                                    }
+                                    // Atualiza desempenho do participante
+                                    if (json.has("rating") && json.has("nome")) {
+                                        val nomeOutro = json.getString("nome")
+                                        val rating = json.getDouble("rating").toFloat()
+                                        outrosParticipantes[nomeOutro] = rating
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                    participantesGrupo
+                        .toSortedMap(compareBy { it.lowercase() })
+                        .forEach { (nome, zona) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(nome, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
+                                // Slider de desempenho do participante (sempre presente)
+                                val pct = outrosParticipantes[nome] ?: 0f
+                                val corZona = zoneColors[zona] ?: Color.Gray
+                                Slider(
+                                    value = pct.coerceIn(0f, 100f),
+                                    onValueChange = {},
+                                    enabled = false,
+                                    valueRange = 0f..100f,
+                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = Color.White,
+                                        activeTrackColor = corZona,
+                                        inactiveTrackColor = corZona.copy(alpha = 0.3f),
+                                        disabledThumbColor = Color.White,
+                                        disabledActiveTrackColor = corZona,
+                                        disabledInactiveTrackColor = corZona.copy(alpha = 0.3f)
+                                    )
+                                )
+                            }
+                        }
                 }
             }
         }
-    }
-}
-// ...existing code...
-    }
 
     if (showResetDialog) {
         AlertDialog(
@@ -407,4 +474,5 @@ if (groupId != null) {
             }
         }
     }
+}
 }

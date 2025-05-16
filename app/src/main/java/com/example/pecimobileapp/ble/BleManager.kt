@@ -134,6 +134,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     this.zonas = zonasList
 }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     fun startActivity() {
         activityStarted = true
         tempoTotal = 0
