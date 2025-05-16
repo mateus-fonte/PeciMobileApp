@@ -1,5 +1,6 @@
 package com.example.pecimobileapp.ui.screens
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.util.Log
 import androidx.activity.compose.BackHandler
@@ -63,6 +64,7 @@ fun PulsatingHeart(modifier: Modifier = Modifier) {
     )
 }
 
+@SuppressLint("StateFlowValueCalledInComposition")
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun WorkoutScreen(
@@ -74,8 +76,10 @@ fun WorkoutScreen(
     wsViewModel: WebSocketViewModel,
     userId: String,
     exerciseId: String,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    profileViewModel: com.example.pecimobileapp.ui.ProfileViewModel // novo parâmetro
 ) {
+    val nome = profileViewModel.nome
     Log.d("WorkoutScreen", "Parâmetros recebidos: selectedZone=$selectedZone, groupId=$groupId, userId=$userId, exerciseId=$exerciseId")
     Log.d("WorkoutScreen", "RealTimeViewModel zonas=${realTimeViewModel.zonas.value}")
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
@@ -306,15 +310,13 @@ fun WorkoutScreen(
             )
         }
 
-
-        // ...existing code...
-if (groupId != null) {
-    Spacer(Modifier.height(16.dp))
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
+    if (groupId != null) {
+        Spacer(Modifier.height(16.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Column(
             modifier = Modifier
@@ -327,36 +329,36 @@ if (groupId != null) {
             Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(Modifier.height(8.dp))
 
-            // Junta o próprio usuário e os outros participantes
-            val allParticipants = buildMap {
-                put(userId, desempenhoPct)
-                putAll(outrosParticipantes)
-            }
-            allParticipants.entries.sortedByDescending { it.value }.forEach { (uid, pct) ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(uid, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
-                    Slider(
-                        value = pct.coerceIn(0f, 100f),
-                        onValueChange = {},
-                        enabled = false,
-                        valueRange = 0f..100f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = zoneColor,
-                            inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text("${pct.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
-                }
+            // Exibe apenas outros participantes (não mostra o próprio usuário)
+            if (nome != null) {
+                outrosParticipantes
+                    .filterKeys { it != userId }
+                    .toSortedMap(compareBy { nome.lowercase() }) // ordem alfabética pelo nome
+                    .forEach { (nome, pct) ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(nome, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
+                            Slider(
+                                value = pct.coerceIn(0f, 100f),
+                                onValueChange = {},
+                                enabled = false,
+                                valueRange = 0f..100f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = zoneColor,
+                                    inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text("${pct.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
             }
         }
     }
 }
-// ...existing code...
     }
 
     if (showResetDialog) {

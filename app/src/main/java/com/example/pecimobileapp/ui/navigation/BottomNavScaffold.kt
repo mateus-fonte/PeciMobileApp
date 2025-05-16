@@ -240,7 +240,8 @@ fun BottomNavScaffold(
                             navController.popBackStack("define_workout", inclusive = false)
                         },
                         userId = userId,
-                        exerciseId = exerciseId
+                        exerciseId = exerciseId,
+                        profileViewModel = profileViewModel // novo parâmetro
                     )
                 }
             }
