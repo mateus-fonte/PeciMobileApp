@@ -84,6 +84,9 @@
  #define THERMAL_HEIGHT 24
  #define THERMAL_ARRAY_SIZE THERMAL_WIDTH * THERMAL_HEIGHT
  
+ #define MAX_MLX_RETRIES 3    // Número máximo de tentativas de leitura
+ #define MLX_RETRY_DELAY 100  // Delay entre tentativas em ms
+
  RTC_DS3231 rtc;             // objeto RTC
  WebSocketsClient webSocket; // Cliente WebSocket
  Adafruit_MLX90640 mlx;      // objeto da câmera térmica
@@ -101,7 +104,7 @@
  unsigned long lastSendTime = 0;     // Última vez que dados foram enviados
  const int sendInterval = 500;       // Intervalo de envio em ms (2Hz = 500ms)
  bool isConnected = false;           // Status da conexão WebSocket
- int delay_millis = 500;                // Delay entre leituras do sensor
+ int delay_millis = 500;             // Delay entre leituras do sensor
  
  // Variáveis para reconexão com backoff exponencial
  unsigned long lastReconnectAttempt = 0;
@@ -382,7 +385,7 @@ class FreqCallback : public BLECharacteristicCallbacks {
  
  // Função para inicializar BLE e serviços de configuração
  void setup_ble() {
-   BLEDevice::init("THERMAL_CAM");
+   BLEDevice::init("THERMAL_CAM-Heart_Box");
    server = BLEDevice::createServer();
  
    Serial.println("[BLE] device created sucessfully");
@@ -552,7 +555,13 @@ class FreqCallback : public BLECharacteristicCallbacks {
    // 2. Capturar dados do sensor térmico (sempre)
    Serial.println("[MLX] Capturando frame térmico...");
    if (mlx.getFrame(frameTemp) != 0) {
-     Serial.println("[MLX] ERRO: Falha ao ler o frame térmico!");
+     Serial.println("[MLX] ERRO: Falha ao ler o frame térmico! Tentando recuperar...");
+     // Tenta reiniciar o I2C
+     Wire.end();
+     delay(50);
+     Wire.begin(I2C_DATA_PIN, I2C_CLOCK_PIN);
+     delay(50);
+     // Se falhar, pula este ciclo
      return;
    }
    
@@ -729,9 +738,36 @@ class FreqCallback : public BLECharacteristicCallbacks {
  
  //----------INSERIR CÓDIGO CAPTURAR DADOS DO SENSOR AQUI------------
  int get_sensor_data() {
-   // Tenta ler um frame do sensor
-   if (mlx.getFrame(frameTemp) != 0) {
-     Serial.println("[MLX] ERRO: Falha ao ler o frame térmico!");
+   int retries = 0;
+   bool success = false;
+   
+   while (retries < MAX_MLX_RETRIES && !success) {
+     if (retries > 0) {
+       Serial.printf("[MLX] Tentativa %d de %d...\n", retries + 1, MAX_MLX_RETRIES);
+       delay(MLX_RETRY_DELAY);  // Aguarda antes de tentar novamente
+     }
+     
+     // Tenta ler um frame do sensor
+     if (mlx.getFrame(frameTemp) == 0) {
+       success = true;
+     } else {
+       Serial.println("[MLX] ERRO: Falha ao ler o frame térmico!");
+       retries++;
+       
+       if (retries >= MAX_MLX_RETRIES) {
+         Serial.println("[MLX] ERRO: Número máximo de tentativas atingido!");
+         return 0;
+       }
+       
+       // Tenta reiniciar o I2C se falhar
+       Wire.end();
+       delay(50);
+       Wire.begin(I2C_DATA_PIN, I2C_CLOCK_PIN);
+       delay(50);
+     }
+   }
+
+   if (!success) {
      return 0;
    }
 
