@@ -76,7 +76,10 @@ fun WorkoutScreen(
     exerciseId: String,
     onStop: () -> Unit
 ) {
-    Log.d("WorkoutScreen", "Parâmetros recebidos: selectedZone=$selectedZone, groupId=$groupId, userId=$userId, exerciseId=$exerciseId")
+    Log.d(
+        "WorkoutScreen",
+        "Parâmetros recebidos: selectedZone=$selectedZone, groupId=$groupId, userId=$userId, exerciseId=$exerciseId"
+    )
     Log.d("WorkoutScreen", "RealTimeViewModel zonas=${realTimeViewModel.zonas.value}")
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
     val avgTemp by realTimeViewModel.avgTemp.collectAsState()
@@ -86,8 +89,10 @@ fun WorkoutScreen(
     val imageReceived by wsViewModel.imageReceived.collectAsState()
     val zonas by realTimeViewModel.zonas.collectAsState()
     val zonaAtual by realTimeViewModel.currentZone.collectAsState()
-
     val desempenhoPct by realTimeViewModel.desempenhoPct.collectAsState()
+    val outrosParticipantes by realTimeViewModel.outrosParticipantes.collectAsState()
+
+    var isInitialized by remember { mutableStateOf(false) }
 
     var isRunning by remember { mutableStateOf(true) }
     var showStopDialog by remember { mutableStateOf(false) }
@@ -97,32 +102,32 @@ fun WorkoutScreen(
     var startTime by remember { mutableStateOf<Long?>(System.currentTimeMillis()) }
     var accumulatedTime by remember { mutableStateOf(0L) }
     var elapsed by remember { mutableStateOf(0) }
-    val formattedTime = String.format("%02d:%02d:%02d", elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60)
-    val outrosParticipantes = remember { mutableStateMapOf<String, Float>() }
+    val formattedTime =
+        String.format("%02d:%02d:%02d", elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60)
 
     val zonaAlvo = selectedZone
     val zoneColor = zoneColors[selectedZone] ?: zoneColors[0]!!
     val currentZoneColor = zoneColors[zonaAtual] ?: zoneColors[0]!!
 
     LaunchedEffect(Unit) {
-    try {
-        Log.d("WorkoutScreen", "Resetando sessão antes de iniciar nova atividade")
-        realTimeViewModel.resetSession()
-        Log.d("WorkoutScreen", "Chamando setWorkoutParameters")
-        realTimeViewModel.setWorkoutParameters(
-            zone = selectedZone,
-            zonasList = zonas,
-            group = groupId,
-            user = userId,
-            exercise = "session-${System.currentTimeMillis()}"
-        )
-        Log.d("WorkoutScreen", "Chamando startActivity")
-        realTimeViewModel.startActivity()
-        Log.d("WorkoutScreen", "Treino iniciado com sucesso")
-    } catch (e: Exception) {
-        Log.e("WorkoutScreen", "Erro ao iniciar treino", e)
+        if (!isInitialized) {
+            try {
+                Log.d("WorkoutScreen", "Inicializando sessão...")
+                realTimeViewModel.setWorkoutParameters(
+                    zone = selectedZone,
+                    zonasList = zonas,
+                    group = groupId,
+                    user = userId,
+                    exercise = exerciseId
+                )
+                realTimeViewModel.startActivity()
+                isInitialized = true
+                Log.d("WorkoutScreen", "Sessão inicializada com sucesso")
+            } catch (e: Exception) {
+                Log.e("WorkoutScreen", "Erro ao inicializar sessão", e)
+            }
+        }
     }
-}
 
     LaunchedEffect(isRunning) {
         while (isRunning) {
@@ -135,20 +140,28 @@ fun WorkoutScreen(
 
 
     LaunchedEffect(groupId, userId) {
-    // Só faz subscribe se estiver em grupo de verdade
-    if (groupId != null && groupId != userId && mqttManager != null) {
-        mqttManager.subscribe("/group/$groupId/data") { raw ->
-            try {
-                val json = org.json.JSONObject(raw)
-                if (json.has("rating")) {
-                    val uid = json.getString("user_uid")
-                    val rating = json.getDouble("rating").toFloat()
-                    outrosParticipantes[uid] = rating
+        if (groupId != null && groupId != userId && mqttManager != null) {
+            mqttManager.subscribe("/group/$groupId/data") { raw ->
+                try {
+                    val json = JSONObject(raw)
+                    if (json.has("rating")) {
+                        val uid = json.getString("user_uid")
+                        val rating = json.getDouble("rating").toFloat()
+                        realTimeViewModel.updateParticipanteRating(uid, rating)
+                    }
+                } catch (_: Exception) {
                 }
-            } catch (_: Exception) {}
+            }
         }
     }
-}
+
+    DisposableEffect(Unit) {
+        onDispose {
+            isRunning = false
+            realTimeViewModel.stopActivity()
+            Log.d("WorkoutScreen", "Treino interrompido ao sair da tela")
+        }
+    }
 
     BackHandler {
         isRunning = false
@@ -212,7 +225,11 @@ fun WorkoutScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         if (i == zonaAlvo) {
-                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = Color.White)
+                            Icon(
+                                Icons.Default.MyLocation,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
                         }
                     }
                 }
@@ -266,9 +283,15 @@ fun WorkoutScreen(
                     Icon(
                         Icons.Default.ArrowForward,
                         contentDescription = "Imagem térmica",
-                        tint = if (isWsConnected && imageReceived) Color.White else Color.White.copy(alpha = 0.4f),
+                        tint = if (isWsConnected && imageReceived) Color.White else Color.White.copy(
+                            alpha = 0.4f
+                        ),
                         modifier = Modifier.size(28.dp)
-                            .let { if (isWsConnected && imageReceived) it.clickable { showThermalPreview = true } else it }
+                            .let {
+                                if (isWsConnected && imageReceived) it.clickable {
+                                    showThermalPreview = true
+                                } else it
+                            }
                     )
                 }
             }
@@ -307,101 +330,126 @@ fun WorkoutScreen(
         }
 
 
-        // ...existing code...
-if (groupId != null) {
-    Spacer(Modifier.height(16.dp))
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
-            Spacer(Modifier.height(4.dp))
-            Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(Modifier.height(8.dp))
-
-            // Junta o próprio usuário e os outros participantes
-            val allParticipants = buildMap {
-                put(userId, desempenhoPct)
-                putAll(outrosParticipantes)
-            }
-            allParticipants.entries.sortedByDescending { it.value }.forEach { (uid, pct) ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        if (groupId != null) {
+            Spacer(Modifier.height(16.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(uid, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
-                    Slider(
-                        value = pct.coerceIn(0f, 100f),
-                        onValueChange = {},
-                        enabled = false,
-                        valueRange = 0f..100f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = zoneColor,
-                            inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.weight(1f)
+                    Icon(
+                        Icons.Default.Diversity1,
+                        contentDescription = "Grupo",
+                        tint = Color.White,
+                        modifier = Modifier.size(25.dp)
                     )
-                    Text("${pct.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Grupo: $groupId",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    // Junta o próprio usuário e os outros participantes
+                    val allParticipants = buildMap {
+                        put(userId, desempenhoPct) // Certifique-se de usar o valor correto
+                        putAll(outrosParticipantes)
+                    }
+
+                    // Exibe os sliders para todos os participantes
+                    allParticipants.entries.sortedByDescending { it.value }.forEach { (uid, pct) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (uid == userId) "Você" else uid,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                modifier = Modifier.width(100.dp)
+                            )
+                            Slider(
+                                value = pct.coerceIn(0f, 100f),
+                                onValueChange = {},
+                                enabled = false,
+                                valueRange = 0f..100f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = zoneColor,
+                                    inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "${pct.toInt()}%",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
-    }
-}
-// ...existing code...
-    }
 
-    if (showResetDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text("Reiniciar Treino") },
-            text = { Text("O treino atual será perdido. Deseja continuar?") },
-            confirmButton = {
-                isRunning = false
-                MqttManager.WorkoutSessionManager.resetSession()
-                navController.navigate("countdown") {
-                    popUpTo("workout") { inclusive = true }
+        if (showResetDialog) {
+            AlertDialog(
+                onDismissRequest = { showResetDialog = false },
+                title = { Text("Reiniciar Treino") },
+                text = { Text("O treino atual será perdido. Deseja continuar?") },
+                confirmButton = {
+                    isRunning = false
+                    MqttManager.WorkoutSessionManager.resetSession()
+                    navController.navigate("countdown") {
+                        popUpTo("workout") { inclusive = true }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetDialog = false }) { Text("Cancelar") }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) { Text("Cancelar") }
-            }
-        )
-    }
+            )
+        }
 
-    if (showStopDialog) {
-        AlertDialog(
-            onDismissRequest = { showStopDialog = false },
-            title = { Text("Parar Treino") },
-            text = { Text("O treino será interrompido. Deseja continuar?") },
-            confirmButton = {
-                isRunning = false
-                realTimeViewModel.stopActivity()
-                navController.popBackStack("define_workout", inclusive = false)
-            },
-            dismissButton = {
-                TextButton(onClick = { showStopDialog = false }) { Text("Cancelar") }
-            }
-        )
-    }
+        if (showStopDialog) {
+            AlertDialog(
+                onDismissRequest = { showStopDialog = false },
+                title = { Text("Parar Treino") },
+                text = { Text("O treino será interrompido. Deseja continuar?") },
+                confirmButton = {
+                    isRunning = false
+                    realTimeViewModel.stopActivity()
+                    navController.popBackStack("define_workout", inclusive = false)
+                },
+                dismissButton = {
+                    TextButton(onClick = { showStopDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
 
-    if (showThermalPreview) {
-        Dialog(onDismissRequest = { showThermalPreview = false }) {
-            Surface(shape = RoundedCornerShape(16.dp)) {
-                Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Imagem Térmica", style = MaterialTheme.typography.titleMedium)
-                    ThermalCameraPreview(wsViewModel)
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = { showThermalPreview = false }) {
-                        Text("Fechar")
+        if (showThermalPreview) {
+            Dialog(onDismissRequest = { showThermalPreview = false }) {
+                Surface(shape = RoundedCornerShape(16.dp)) {
+                    Column(
+                        Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Imagem Térmica", style = MaterialTheme.typography.titleMedium)
+                        ThermalCameraPreview(wsViewModel)
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = { showThermalPreview = false }) {
+                            Text("Fechar")
+                        }
                     }
                 }
             }

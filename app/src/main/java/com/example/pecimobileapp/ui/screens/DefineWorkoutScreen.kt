@@ -17,9 +17,14 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.ui.ProfileViewModel
 import com.example.pecimobileapp.viewmodels.ProfileViewModelFactory
 import com.example.pecimobileapp.ui.theme.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.util.*
 
 fun encodeBase62(number: Long): String {
@@ -40,13 +45,17 @@ fun DefineWorkoutScreen(navController: NavController) {
     val profileViewModel: ProfileViewModel =
         androidx.lifecycle.viewmodel.compose.viewModel(factory = ProfileViewModelFactory(context))
 
+    val scope = rememberCoroutineScope()
     var selectedZone by remember { mutableStateOf(1) }
     var workoutMode by remember { mutableStateOf("") } // "", "individual", "criar", "entrar"
     var groupNameInput by remember { mutableStateOf("") }
     var groupFullName by remember { mutableStateOf("") }
     var showError by remember { mutableStateOf(false) }
+    var isGroupValid by remember { mutableStateOf(false) }
+    var isCheckingGroup by remember { mutableStateOf(false) }
 
     val focusManager = LocalFocusManager.current
+    var debounceJob by remember { mutableStateOf<Job?>(null) }
     val scrollState = rememberScrollState()
 
     val zones = listOf(
@@ -59,6 +68,30 @@ fun DefineWorkoutScreen(navController: NavController) {
 
     var expanded by remember { mutableStateOf(false) }
     val selectedZoneText = zones.firstOrNull { it.first == selectedZone }?.second ?: "Selecione uma zona"
+
+    // MQTT Manager para validação do grupo
+    val mqttManager = MqttManager
+
+    // Escuta para respostas de validação do grupo
+    LaunchedEffect(Unit) {
+        mqttManager.subscribe("/group/check_response") { message ->
+            val response = JSONObject(message)
+            if (response.getString("group_id") == groupNameInput.trim()) {
+                isGroupValid = response.getBoolean("exists")
+                isCheckingGroup = false
+            }
+        }
+    }
+
+    // Cancela o debounce ao sair do modo "entrar"
+    DisposableEffect(workoutMode) {
+        if (workoutMode != "entrar") {
+            debounceJob?.cancel()
+            isCheckingGroup = false
+            isGroupValid = false
+        }
+        onDispose { }
+    }
 
     Column(
         modifier = Modifier
@@ -132,22 +165,32 @@ fun DefineWorkoutScreen(navController: NavController) {
             OutlinedTextField(
                 value = groupNameInput,
                 onValueChange = {
-                    if (workoutMode == "criar") {
-                        if (it.length <= 10 && it.all { c -> c.isLetter() }) {
-                            groupNameInput = it
-                            showError = false
-                        } else {
-                            showError = true
+                    groupNameInput = it
+                    showError = false
+                    if (workoutMode == "entrar") {
+                        isCheckingGroup = true
+                        isGroupValid = false
+
+                        debounceJob?.cancel()
+                        debounceJob = scope.launch {
+                            delay(500)
+                            val payload = JSONObject().apply {
+                                put("group_id", it.trim())
+                            }
+                            mqttManager.publish("/group/check", payload.toString())
+
+                            delay(5000)
+                            if (isCheckingGroup) {
+                                isCheckingGroup = false
+                                isGroupValid = false
+                            }
                         }
-                    } else {
-                        groupNameInput = it
-                        showError = false
                     }
                 },
                 label = {
                     Text(if (workoutMode == "criar") "Nome do grupo (máx. 10 letras)" else "Grupo: ")
                 },
-                isError = showError,
+                isError = showError || (!isGroupValid && !isCheckingGroup && workoutMode == "entrar"),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
@@ -159,8 +202,10 @@ fun DefineWorkoutScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth()
             )
 
-            if (showError && workoutMode == "criar") {
-                Text("Somente letras, até 10 caracteres.", color = MaterialTheme.colorScheme.error)
+            if (isCheckingGroup) {
+                Text("Verificando grupo...", color = Color.Gray)
+            } else if (!isGroupValid && workoutMode == "entrar") {
+                Text("Grupo não encontrado.", color = MaterialTheme.colorScheme.error)
             }
 
             if (workoutMode == "criar") {
@@ -192,14 +237,14 @@ fun DefineWorkoutScreen(navController: NavController) {
 
         val canStart = when (workoutMode) {
             "individual" -> true
-            "criar", "entrar" -> groupFullName.isNotEmpty()
+            "criar" -> groupFullName.isNotEmpty()
+            "entrar" -> isGroupValid && groupFullName.isNotEmpty()
             else -> false
         }
 
-        //Botao para iniciar treino
-
         Button(
             onClick = {
+                debounceJob?.cancel() // Cancela o debounce ao iniciar a atividade
                 val groupParam = if (workoutMode == "individual") null else groupFullName
                 val userId = profileViewModel.userId ?: "default_user"
 

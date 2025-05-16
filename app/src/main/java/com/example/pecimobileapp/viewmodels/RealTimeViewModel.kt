@@ -6,6 +6,7 @@ import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import com.example.pecimobileapp.ble.DeviceType
 import androidx.lifecycle.viewModelScope
 import com.example.pecimobileapp.ble.BleManager
@@ -16,14 +17,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
+class RealTimeViewModel(
+    app: Application
+    ) : AndroidViewModel(app) {
     private val bleProvider = BleManagerProvider.getInstance()
     private val bleManager = bleProvider.getBleManager()
     private val wsService = WebSocketServerService(app)
 
+
     val scanResultsPpg: StateFlow<List<ScanResult>> = bleManager.scanResults
     val scanResultsCam: StateFlow<List<ScanResult>> = bleManager.scanResults
+
     val desempenhoPct: StateFlow<Float> = bleManager.desempenhoPct
+
+    private val _outrosParticipantes = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val outrosParticipantes: StateFlow<Map<String, Float>> = _outrosParticipantes
 
     private val _isPpgConnected = MutableStateFlow(false)
     val isPpgConnected: StateFlow<Boolean> = _isPpgConnected
@@ -215,6 +223,13 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+
+    fun updateParticipanteRating(userId: String, rating: Float) {
+    val updatedMap = _outrosParticipantes.value.toMutableMap()
+    updatedMap[userId] = rating
+    _outrosParticipantes.value = updatedMap
+}
+
     fun sendAllConfigs(
         ssid: String,
         password: String
@@ -229,12 +244,8 @@ class RealTimeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun resetSession() {
-        _selectedZone.value = 1
-        _zonas.value = emptyList()
-        _groupId.value = null
-        _userId.value = "aluno01"
-        _exerciseId.value = "exercicio_teste"
-        _activityStarted.value = false
+        _outrosParticipantes.value = emptyMap()
+
         MqttManager.WorkoutSessionManager.resetSession()
         Log.d("RealTimeViewModel", "Sessão redefinida")
     }
