@@ -227,7 +227,8 @@ class OpenCVUtils(private val context: Context) {
 
         // Depois aplicar Gaussian Blur no resultado colorido
         val blurredMat = Mat()
-        Imgproc.GaussianBlur(colorMat, blurredMat, Size(3.0, 3.0), 0.0)
+        // Usar um kernel mais largo horizontalmente (15x3) para reduzir as listras verticais
+        Imgproc.GaussianBlur(colorMat, blurredMat, Size(15.0, 3.0), 0.0)
         
         // 3. Redimensionar o resultado borrado para o tamanho da imagem original
         val resizedMat = Mat()
@@ -236,11 +237,10 @@ class OpenCVUtils(private val context: Context) {
         // 4. Converter para Bitmap
         val thermalBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
         Utils.matToBitmap(resizedMat, thermalBitmap)
-        
-        // 5. Sobrepor na imagem original com opacidade reduzida
+          // 5. Sobrepor na imagem original com opacidade média
         val canvas = Canvas(bitmap)
         val paint = Paint().apply {
-            alpha = 40  // Opacidade de ~15%
+            alpha = 127  // Opacidade de 50%
         }
         canvas.drawBitmap(thermalBitmap, 0f, 0f, paint)
         

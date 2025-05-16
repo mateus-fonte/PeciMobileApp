@@ -383,17 +383,17 @@ fun connectCam(device: BluetoothDevice) {
             BluetoothGatt.STATE_DISCONNECTED -> {
                 _connected.value = false
                 gatt?.close()
-                gatt = null
-
-                // Handle unexpected disconnections
+                gatt = null                // Handle unexpected disconnections
                 if (!expectingDisconnect) {
                     _connectionLost.value = true
                     Log.w(TAG, "Desconexão inesperada detectada para $deviceInfo")
                     
-                    // Automatic reconnection for specific status codes
                     when (status) {
-                        133, 8, 62 -> { // GATT_ERROR (timeout), GATT_CONN_TIMEOUT, or connection failure
-                            Log.d(TAG, "Tentando reconexão automática após erro $statusStr")
+                        19, 22 -> { // Terminated by peer or host - don't auto reconnect
+                            Log.d(TAG, "Conexão terminada normalmente: $statusStr")
+                        }
+                        else -> { // Auto reconnect for all other cases
+                            Log.d(TAG, "Tentando reconexão automática após desconexão inesperada")
                             Handler(Looper.getMainLooper()).postDelayed({
                                 lastDevice?.let { device ->
                                     if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
@@ -403,14 +403,12 @@ fun connectCam(device: BluetoothDevice) {
                                 }
                             }, 2000) // 2 second delay before reconnecting
                         }
-                        19, 22 -> { // Terminated by peer or host - don't auto reconnect
-                            Log.d(TAG, "Conexão terminada normalmente: $statusStr")
-                        }
                     }
                 }
                 // Reset the flag after use
-                expectingDisconnect = false
-            }
+                expectingDisconnect = false            }
+        }
+        when (newState) {
             BluetoothGatt.STATE_CONNECTED -> {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     _connected.value = true
@@ -419,6 +417,20 @@ fun connectCam(device: BluetoothDevice) {
                     
                     // Start discovering services
                     Handler(Looper.getMainLooper()).postDelayed({
+                        // Se reconectou, verifica se o dispositivo é a câmera térmica e reinicia o processo
+                        if (currentDeviceType == DeviceType.THERMAL_CAMERA) {
+                            Log.d(TAG, "Reconexão bem sucedida com a câmera térmica, reiniciando processo de configuração")
+                            // Tenta resgatar últimas configurações conhecidas
+                            val prefs = context.getSharedPreferences("wifi_config", Context.MODE_PRIVATE)
+                            val lastSsid = prefs.getString("last_ssid", null)
+                            val lastPass = prefs.getString("last_pass", null)
+                            val lastServerIp = prefs.getString("last_server_ip", null)
+                            
+                            if (lastSsid != null && lastPass != null && lastServerIp != null) {
+                                Log.d(TAG, "Reenviando últimas configurações conhecidas: SSID=$lastSsid")
+                                sendAllConfigs(lastSsid, lastPass, lastServerIp)
+                            }
+                        }
                         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
                             g.discoverServices()
                         }
@@ -522,26 +534,41 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
             } else {
                 Log.w(TAG, "Ignorando dados PPG de dispositivo incorreto (DeviceType: ${currentDeviceType})")
             }
-        }
-
-        SENSOR_DATA1_UUID, SENSOR_DATA2_UUID, SENSOR_DATA3_UUID -> {
+        }        SENSOR_DATA1_UUID, SENSOR_DATA2_UUID, SENSOR_DATA3_UUID -> {
             if (currentDeviceType == DeviceType.THERMAL_CAMERA) {
-                Log.d(TAG, "Recebendo dados de temperatura da câmera térmica")
-                val temp = raw.substringAfter('.', "0").filter(Char::isDigit).toIntOrNull()?.div(100f) ?: 0f
-                val source = when (characteristic.uuid) {
-                    SENSOR_DATA1_UUID -> { _avgTemp.value = temp; "avg_temp" }
-                    SENSOR_DATA2_UUID -> { _maxTemp.value = temp; "max_temp" }
-                    SENSOR_DATA3_UUID -> { _minTemp.value = temp; "min_temp" }
-                    else -> "unknown"
+                Log.d(TAG, "Recebendo dados de temperatura da câmera térmica: $raw")
+                  // Verificar se é uma mensagem de erro
+                if (raw.endsWith(".ERR")) {
+                    Log.w(TAG, "Erro reportado pela câmera térmica")
+                    // Definir valores de erro para todas as temperaturas
+                    _avgTemp.value = null
+                    _maxTemp.value = null
+                    _minTemp.value = null
+                    // Não publicamos no MQTT em caso de erro
+                    return
                 }
-                saveToFile(raw)
-                MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp, selectedZone, zonas)
+                
+                // Processamento normal dos dados
+                val temp = raw.substringAfter('.', "0").filter(Char::isDigit).toIntOrNull()?.div(100f)
+                if (temp != null) {
+                    val source = when (characteristic.uuid) {
+                        SENSOR_DATA1_UUID -> { _avgTemp.value = temp; "avg_temp" }
+                        SENSOR_DATA2_UUID -> { _maxTemp.value = temp; "max_temp" }
+                        SENSOR_DATA3_UUID -> { _minTemp.value = temp; "min_temp" }
+                        else -> "unknown"
+                    }
+                    saveToFile(raw)
+                    MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp, selectedZone, zonas)
+                } else {
+                    Log.e(TAG, "Erro ao parsear dados de temperatura: $raw")
+                }
             } else {
                 Log.d(TAG, "Ignorando dados de temperatura de dispositivo não câmera")
             }
         }
     }
-}    @SuppressLint("MissingPermission")
+}    
+    @SuppressLint("MissingPermission")
     private fun writeNextConfig() {
         if (!_connected.value) {
             Log.e(TAG, "Tentativa de escrever config enquanto desconectado")
@@ -606,11 +633,19 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
             _allConfigSent.value = false
         }
     }
-      @SuppressLint("MissingPermission")
+    @SuppressLint("MissingPermission")
     fun sendAllConfigs(ssid: String, password: String, serverIp: String) {
         if (!_connected.value) {
             Log.e(TAG, "Tentativa de enviar configurações sem conexão BLE ativa")
             return
+        }
+        
+        // Salvar configurações para uso futuro
+        context.getSharedPreferences("wifi_config", Context.MODE_PRIVATE).edit().apply {
+            putString("last_ssid", ssid)
+            putString("last_pass", password)
+            putString("last_server_ip", serverIp)
+            apply()
         }
 
         val g = gatt
@@ -708,7 +743,8 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
         } catch (e: IOException) {
             Log.e(TAG, "Erro ao salvar no arquivo", e)
         }
-    }    @SuppressLint("MissingPermission")
+    }
+    @SuppressLint("MissingPermission")
     fun disconnect() {
     // Atualizar o provider antes de desconectar
     currentDeviceType?.let {

@@ -540,7 +540,6 @@ class WebSocketServerService(private val context: Context) {
             // Configurações para tornar o servidor mais estável
             connectionLostTimeout = 30  // Aumentar para 30 segundos
             setConnectionLostTimeout(30)
-            maxConnections = 5  // Limitar número de conexões simultâneas
         }
         
         override fun onOpen(conn: WebSocket, handshake: ClientHandshake) {
