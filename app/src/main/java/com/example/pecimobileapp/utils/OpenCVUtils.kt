@@ -240,7 +240,7 @@ class OpenCVUtils(private val context: Context) {
         // 5. Sobrepor na imagem original com opacidade reduzida
         val canvas = Canvas(bitmap)
         val paint = Paint().apply {
-            alpha = 80  // Opacidade de ~30%
+            alpha = 40  // Opacidade de ~15%
         }
         canvas.drawBitmap(thermalBitmap, 0f, 0f, paint)
         
