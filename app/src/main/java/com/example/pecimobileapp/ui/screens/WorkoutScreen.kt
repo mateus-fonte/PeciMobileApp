@@ -80,6 +80,7 @@ fun WorkoutScreen(
     profileViewModel: com.example.pecimobileapp.ui.ProfileViewModel // novo parâmetro
 ) {
     val nome = profileViewModel.nome
+    val nomeParticipante = profileViewModel.nome
     Log.d("WorkoutScreen", "Parâmetros recebidos: selectedZone=$selectedZone, groupId=$groupId, userId=$userId, exerciseId=$exerciseId")
     Log.d("WorkoutScreen", "RealTimeViewModel zonas=${realTimeViewModel.zonas.value}")
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
@@ -123,6 +124,19 @@ fun WorkoutScreen(
         Log.d("WorkoutScreen", "Chamando startActivity")
         realTimeViewModel.startActivity()
         Log.d("WorkoutScreen", "Treino iniciado com sucesso")
+        // Publica zonaAlvo e nomeParticipante via MQTT
+        mqttManager?.let {
+            val nomeToSend = nomeParticipante
+            val zonaAlvoToSend = selectedZone
+            val topic = if (groupId != null) "/group/$groupId/data" else "/user/$userId/data"
+            val payload = org.json.JSONObject().apply {
+                put("user_uid", userId)
+                put("zona_alvo", zonaAlvoToSend)
+                put("nome", nomeToSend)
+                put("exercise_id", "session-${System.currentTimeMillis()}")
+            }
+            it.publish(topic, payload.toString())
+        }
     } catch (e: Exception) {
         Log.e("WorkoutScreen", "Erro ao iniciar treino", e)
     }
@@ -137,6 +151,23 @@ fun WorkoutScreen(
         }
     }
 
+    // Envio periódico via MQTT a cada 10 segundos
+    LaunchedEffect(isRunning) {
+        while (isRunning) {
+            delay(10_000L)
+            mqttManager?.let {
+                val topic = if (groupId != null) "/group/$groupId/data" else "/user/$userId/data"
+                val payload = org.json.JSONObject().apply {
+                    put("user_uid", userId)
+                    put("zona_alvo", selectedZone)
+                    put("nome", nomeParticipante)
+                    put("exercise_id", exerciseId)
+                    put("hr", hr ?: JSONObject.NULL)
+                }
+                it.publish(topic, payload.toString())
+            }
+        }
+    }
 
     LaunchedEffect(groupId, userId) {
     // Só faz subscribe se estiver em grupo de verdade
@@ -148,6 +179,14 @@ fun WorkoutScreen(
                     val uid = json.getString("user_uid")
                     val rating = json.getDouble("rating").toFloat()
                     outrosParticipantes[uid] = rating
+                }
+                // Atualiza zonaAlvo e nomeParticipante dos outros participantes
+                if (json.has("zona_alvo") && json.has("nome")) {
+                    val uid = json.optString("user_uid", "")
+                    val zonaAlvoOutro = json.getInt("zona_alvo")
+                    val nomeOutro = json.getString("nome")
+                    // Você pode armazenar ou exibir essas informações conforme necessário
+                    Log.d("WorkoutScreen", "Participante: $nomeOutro (uid=$uid) está na zona $zonaAlvoOutro")
                 }
             } catch (_: Exception) {}
         }
@@ -317,48 +356,52 @@ fun WorkoutScreen(
             colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
             shape = RoundedCornerShape(16.dp),
             elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
-            Spacer(Modifier.height(4.dp))
-            Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Spacer(Modifier.height(8.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
+                Spacer(Modifier.height(4.dp))
+                Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Spacer(Modifier.height(8.dp))
 
-            // Exibe apenas outros participantes (não mostra o próprio usuário)
-            if (nome != null) {
-                outrosParticipantes
-                    .filterKeys { it != userId }
-                    .toSortedMap(compareBy { nome.lowercase() }) // ordem alfabética pelo nome
-                    .forEach { (nome, pct) ->
+                // Novo: lista de nomes e zonas dos participantes do grupo (exceto o próprio usuário)
+                val participantesGrupo = remember { mutableStateMapOf<String, Int>() }
+                // Atualiza participantesGrupo ao receber mensagens MQTT
+                LaunchedEffect(Unit) {
+                    if (groupId != null && groupId != userId && mqttManager != null) {
+                        mqttManager.subscribe("/group/$groupId/data") { raw ->
+                            try {
+                                val json = org.json.JSONObject(raw)
+                                if (json.has("zona_alvo") && json.has("nome")) {
+                                    val uid = json.optString("user_uid", "")
+                                    val zonaAlvoOutro = json.getInt("zona_alvo")
+                                    val nomeOutro = json.getString("nome")
+                                    if (uid != userId) {
+                                        participantesGrupo[nomeOutro] = zonaAlvoOutro
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
+                participantesGrupo
+                    .toSortedMap(compareBy { it.lowercase() })
+                    .forEach { (nome, zona) ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(nome, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
-                            Slider(
-                                value = pct.coerceIn(0f, 100f),
-                                onValueChange = {},
-                                enabled = false,
-                                valueRange = 0f..100f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color.White,
-                                    activeTrackColor = zoneColor,
-                                    inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text("${pct.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+                            Text("Zona: $zona", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
                         }
                     }
             }
         }
     }
-}
     }
 
     if (showResetDialog) {
