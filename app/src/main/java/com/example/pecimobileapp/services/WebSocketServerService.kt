@@ -536,10 +536,10 @@ class WebSocketServerService(private val context: Context) {
         private var _isRunning = false
         val isRunning: Boolean
             get() = _isRunning
-        
-        init {
+          init {
             // Configurações para tornar o servidor mais estável
-            connectionLostTimeout = 20  // Reduz o timeout para 20 segundos (anteriormente 60)
+            connectionLostTimeout = 30  // Aumentar para 30 segundos
+            setConnectionLostTimeout(30)
         }
         
         override fun onOpen(conn: WebSocket, handshake: ClientHandshake) {
@@ -578,8 +578,7 @@ class WebSocketServerService(private val context: Context) {
                 Log.e(TAG, "Erro ao enviar confirmação de texto", e)
             }
         }
-        
-        override fun onMessage(conn: WebSocket, message: ByteBuffer) {
+          override fun onMessage(conn: WebSocket, message: ByteBuffer) {
             Log.d(TAG, "Dados binários recebidos de ${conn.remoteSocketAddress}, tamanho: ${message.remaining()} bytes")
             
             _connectionStats.value = _connectionStats.value.copy(
@@ -590,11 +589,17 @@ class WebSocketServerService(private val context: Context) {
                 val byteArray = ByteArray(message.remaining())
                 message.get(byteArray)
                 
+                // Enviar confirmação antes de processar para evitar timeout
+                try {
+                    if (conn.isOpen) {
+                        conn.send("RECEIVED_BINARY")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro ao enviar confirmação binária", e)
+                }
+                
                 // Processar os dados binários recebidos
                 processReceivedData(byteArray)
-                
-                // Confirmação para mensagens binárias
-                conn.send("RECEIVED_BINARY")
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao processar mensagem binária", e)
             }
