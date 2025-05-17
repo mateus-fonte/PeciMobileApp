@@ -1,5 +1,6 @@
 package com.example.pecimobileapp.ui.screens
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.util.Log
 import androidx.activity.compose.BackHandler
@@ -25,15 +26,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
+import com.example.pecimobileapp.R
 import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 import kotlinx.coroutines.delay
 import org.json.JSONObject
-import androidx.compose.ui.res.painterResource
-import com.example.pecimobileapp.R
-
-
 
 val zoneColors = mapOf(
     0 to Color(0xFFBDBDBD),
@@ -63,6 +61,7 @@ fun PulsatingHeart(modifier: Modifier = Modifier) {
     )
 }
 
+@SuppressLint("StateFlowValueCalledInComposition")
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun WorkoutScreen(
@@ -74,25 +73,19 @@ fun WorkoutScreen(
     wsViewModel: WebSocketViewModel,
     userId: String,
     exerciseId: String,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    profileViewModel: com.example.pecimobileapp.ui.ProfileViewModel
 ) {
-    Log.d(
-        "WorkoutScreen",
-        "Parâmetros recebidos: selectedZone=$selectedZone, groupId=$groupId, userId=$userId, exerciseId=$exerciseId"
-    )
-    Log.d("WorkoutScreen", "RealTimeViewModel zonas=${realTimeViewModel.zonas.value}")
-    val hr by realTimeViewModel.ppgHeartRate.collectAsState()
-    val avgTemp by realTimeViewModel.avgTemp.collectAsState()
-    val isCamConnected by realTimeViewModel.isCamConnected.collectAsState()
-    val isPpgConnected by realTimeViewModel.isPpgConnected.collectAsState()
-    val isWsConnected by wsViewModel.isWsConnected.collectAsState()
-    val imageReceived by wsViewModel.imageReceived.collectAsState()
+    val nomeParticipante = profileViewModel.nome
     val zonas by realTimeViewModel.zonas.collectAsState()
     val zonaAtual by realTimeViewModel.currentZone.collectAsState()
     val desempenhoPct by realTimeViewModel.desempenhoPct.collectAsState()
     val outrosParticipantes by realTimeViewModel.outrosParticipantes.collectAsState()
-
-    var isInitialized by remember { mutableStateOf(false) }
+    val hr by realTimeViewModel.ppgHeartRate.collectAsState()
+    val avgTemp by realTimeViewModel.avgTemp.collectAsState()
+    val isCamConnected by realTimeViewModel.isCamConnected.collectAsState()
+    val isWsConnected by wsViewModel.isWsConnected.collectAsState()
+    val imageReceived by wsViewModel.imageReceived.collectAsState()
 
     var isRunning by remember { mutableStateOf(true) }
     var showStopDialog by remember { mutableStateOf(false) }
@@ -102,27 +95,27 @@ fun WorkoutScreen(
     var startTime by remember { mutableStateOf<Long?>(System.currentTimeMillis()) }
     var accumulatedTime by remember { mutableStateOf(0L) }
     var elapsed by remember { mutableStateOf(0) }
-    val formattedTime =
-        String.format("%02d:%02d:%02d", elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60)
+    val formattedTime = String.format("%02d:%02d:%02d", elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60)
 
-    val zonaAlvo = selectedZone
     val zoneColor = zoneColors[selectedZone] ?: zoneColors[0]!!
     val currentZoneColor = zoneColors[zonaAtual] ?: zoneColors[0]!!
+
+    var isInitialized by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         if (!isInitialized) {
             try {
-                Log.d("WorkoutScreen", "Inicializando sessão...")
+                Log.d("WorkoutScreen", "Inicializando sessão com zone=$selectedZone, group=$groupId")
                 realTimeViewModel.setWorkoutParameters(
                     zone = selectedZone,
                     zonasList = zonas,
                     group = groupId,
                     user = userId,
-                    exercise = exerciseId
+                    exercise = exerciseId,
+                    nome = nomeParticipante
                 )
                 realTimeViewModel.startActivity()
                 isInitialized = true
-                Log.d("WorkoutScreen", "Sessão inicializada com sucesso")
             } catch (e: Exception) {
                 Log.e("WorkoutScreen", "Erro ao inicializar sessão", e)
             }
@@ -138,32 +131,7 @@ fun WorkoutScreen(
         }
     }
 
-
-    LaunchedEffect(groupId, userId) {
-        if (groupId != null && groupId != userId && mqttManager != null) {
-            mqttManager.subscribe("/group/$groupId/data") { raw ->
-                try {
-                    val json = JSONObject(raw)
-                    if (json.has("rating")) {
-                        val uid = json.getString("user_uid")
-                        val rating = json.getDouble("rating").toFloat()
-                        realTimeViewModel.updateParticipanteRating(uid, rating)
-                    }
-                } catch (_: Exception) {
-                }
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            isRunning = false
-            realTimeViewModel.stopActivity()
-            Log.d("WorkoutScreen", "Treino interrompido ao sair da tela")
-        }
-    }
-
-    BackHandler {
+        BackHandler {
         isRunning = false
         startTime?.let { accumulatedTime += System.currentTimeMillis() - it }
         startTime = null
@@ -185,6 +153,7 @@ fun WorkoutScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Header: controles e tempo
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -214,54 +183,51 @@ fun WorkoutScreen(
             Text(formattedTime, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
 
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().height(52.dp)) {
-                (0..5).forEach { i ->
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .background(zoneColors[i] ?: Color.Gray),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (i == zonaAlvo) {
-                            Icon(
-                                Icons.Default.MyLocation,
-                                contentDescription = null,
-                                tint = Color.White
-                            )
-                        }
-                    }
-                }
-            }
-
-            Box(
-                Modifier.fillMaxWidth().height(160.dp).background(currentZoneColor),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 36.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        // Indicador de zonas
+        Row(Modifier.fillMaxWidth().height(52.dp)) {
+            (0..5).forEach { i ->
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(zoneColors[i] ?: Color.Gray),
+                    contentAlignment = Alignment.Center
                 ) {
-                    PulsatingHeart()
-                    Spacer(Modifier.width(28.dp))
-                    Text(
-                        text = "${hr ?: "--"}",
-                        fontSize = 68.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "bpm",
-                        fontSize = 24.sp,
-                        color = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(top = 18.dp)
-                    )
+                    if (i == selectedZone) {
+                        Icon(Icons.Default.MyLocation, contentDescription = null, tint = Color.White)
+                    }
                 }
             }
         }
 
+        // Batimentos cardíacos
+        Box(
+            Modifier.fillMaxWidth().height(160.dp).background(currentZoneColor),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 36.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PulsatingHeart()
+                Spacer(Modifier.width(28.dp))
+                Text(
+                    text = "${hr ?: "--"}",
+                    fontSize = 68.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "bpm",
+                    fontSize = 24.sp,
+                    color = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(top = 18.dp)
+                )
+            }
+        }
+
+        // Temperatura média + acesso à imagem térmica
         if (isCamConnected) {
             Box(
                 Modifier
@@ -283,20 +249,18 @@ fun WorkoutScreen(
                     Icon(
                         Icons.Default.ArrowForward,
                         contentDescription = "Imagem térmica",
-                        tint = if (isWsConnected && imageReceived) Color.White else Color.White.copy(
-                            alpha = 0.4f
-                        ),
-                        modifier = Modifier.size(28.dp)
-                            .let {
-                                if (isWsConnected && imageReceived) it.clickable {
-                                    showThermalPreview = true
-                                } else it
-                            }
+                        tint = if (isWsConnected && imageReceived) Color.White else Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(28.dp).let {
+                            if (isWsConnected && imageReceived) it.clickable {
+                                showThermalPreview = true
+                            } else it
+                        }
                     )
                 }
             }
         }
 
+        // Slider do próprio usuário
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -316,7 +280,7 @@ fun WorkoutScreen(
                 enabled = false,
                 valueRange = 0f..100f,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .padding(horizontal = 8.dp),
                 colors = SliderDefaults.colors(
                     thumbColor = Color.White,
@@ -328,8 +292,7 @@ fun WorkoutScreen(
                 )
             )
         }
-
-
+            // Participantes do grupo (exceto o próprio)
         if (groupId != null) {
             Spacer(Modifier.height(16.dp))
             Card(
@@ -344,65 +307,47 @@ fun WorkoutScreen(
                         .padding(vertical = 12.dp, horizontal = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        Icons.Default.Diversity1,
-                        contentDescription = "Grupo",
-                        tint = Color.White,
-                        modifier = Modifier.size(25.dp)
-                    )
+                    Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Grupo: $groupId",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
+                    Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     Spacer(Modifier.height(8.dp))
 
-                    // Junta o próprio usuário e os outros participantes
-                    val allParticipants = buildMap {
-                        put(userId, desempenhoPct) // Certifique-se de usar o valor correto
-                        putAll(outrosParticipantes)
-                    }
-
-                    // Exibe os sliders para todos os participantes
-                    allParticipants.entries.sortedByDescending { it.value }.forEach { (uid, pct) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (uid == userId) "Você" else uid,
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                modifier = Modifier.width(100.dp)
-                            )
-                            Slider(
-                                value = pct.coerceIn(0f, 100f),
-                                onValueChange = {},
-                                enabled = false,
-                                valueRange = 0f..100f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color.White,
-                                    activeTrackColor = zoneColor,
-                                    inactiveTrackColor = Color.Gray.copy(alpha = 0.5f)
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = "${pct.toInt()}%",
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(start = 8.dp)
-                            )
+                    outrosParticipantes
+                        .toSortedMap(compareBy { it.lowercase() })
+                        .forEach { (nome, data) ->
+                            val rating = data.rating.coerceIn(0f, 100f)
+                            val zona = data.zonaAlvo
+                            val corZona = zoneColors[zona] ?: Color.Gray
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(nome, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
+                                Slider(
+                                    value = rating,
+                                    onValueChange = {},
+                                    enabled = false,
+                                    valueRange = 0f..100f,
+                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = Color.White,
+                                        activeTrackColor = corZona,
+                                        inactiveTrackColor = corZona.copy(alpha = 0.3f),
+                                        disabledThumbColor = Color.White,
+                                        disabledActiveTrackColor = corZona,
+                                        disabledInactiveTrackColor = corZona.copy(alpha = 0.3f)
+                                    )
+                                )
+                                Text("${rating.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+                            }
                         }
-                    }
                 }
             }
         }
 
+        // Diálogo: Resetar treino
         if (showResetDialog) {
             AlertDialog(
                 onDismissRequest = { showResetDialog = false },
@@ -421,6 +366,7 @@ fun WorkoutScreen(
             )
         }
 
+        // Diálogo: Parar treino
         if (showStopDialog) {
             AlertDialog(
                 onDismissRequest = { showStopDialog = false },
@@ -437,6 +383,7 @@ fun WorkoutScreen(
             )
         }
 
+        // Diálogo: Imagem térmica
         if (showThermalPreview) {
             Dialog(onDismissRequest = { showThermalPreview = false }) {
                 Surface(shape = RoundedCornerShape(16.dp)) {

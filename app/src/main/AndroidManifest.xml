@@ -34,8 +34,8 @@
         android:name=".BluetoothApplication"
         android:allowBackup="true"
         android:label="@string/app_name"
-        android:icon="@mipmap/thb"
-        android:roundIcon="@mipmap/thb_round"
+        android:icon="@mipmap/logol"
+        android:roundIcon="@mipmap/logol_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.PeciMobileApp">
 

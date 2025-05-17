@@ -23,6 +23,8 @@ class RealTimeViewModel(
     private val bleProvider = BleManagerProvider.getInstance()
     private val bleManager = bleProvider.getBleManager()
     private val wsService = WebSocketServerService(app)
+    private val _nome = MutableStateFlow<String?>(null)
+    val nome: StateFlow<String?> = _nome
 
 
     val scanResultsPpg: StateFlow<List<ScanResult>> = bleManager.scanResults
@@ -126,18 +128,19 @@ class RealTimeViewModel(
         }
     }
 
-    fun loadUserId(context: Context) {
-        viewModelScope.launch {
-            ProfilePreferences.userIdFlow(context).collectLatest { id ->
-                if (id != null) {
-                    _userId.value = id
-                    Log.d("RealTimeViewModel", "user_id carregado: $id")
-                } else {
-                    Log.e("RealTimeViewModel", "user_id não encontrado")
-                }
-            }
+
+    fun loadUserProfile(context: Context) {
+    viewModelScope.launch {
+        ProfilePreferences.nomeFlow(context).collectLatest { nome ->
+            _nome.value = nome
+            Log.d("RealTimeViewModel", "Nome carregado: $nome")
+        }
+        ProfilePreferences.userIdFlow(context).collectLatest { id ->
+            _userId.value = id ?: "default_user"
+            Log.d("RealTimeViewModel", "user_id carregado: $id")
         }
     }
+}
 
     fun connectPpg(device: BluetoothDevice) {
         bleManager.connectPpg(device)
@@ -196,7 +199,8 @@ class RealTimeViewModel(
     zonasList: List<Pair<String, IntRange>>,
     group: String? = null,
     user: String,
-    exercise: String
+    exercise: String,
+    nome: String?
 ) {
     Log.d("RealTimeViewModel", "setWorkoutParameters chamado com: zone=$zone, group=$group, user=$user, exercise=$exercise")
     Log.d("RealTimeViewModel", "zonasList=$zonasList")
@@ -207,8 +211,9 @@ class RealTimeViewModel(
     _groupId.value = group ?: user
     _userId.value = user
     _exerciseId.value = exercise
+    _nome.value = nome
 
-    bleManager.setSessionParameters(group, user, exercise, zone, zonasList)
+    bleManager.setSessionParameters(group, user, exercise, zone, zonasList, nome)
 }
 
     fun prepareForWorkout() {
