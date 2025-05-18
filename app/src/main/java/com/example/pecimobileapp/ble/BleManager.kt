@@ -91,6 +91,8 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private val retryDelayMs = 5000L
     private var activityStarted = false
 
+    private var nome: String? = null
+
     private var expectingDisconnect = false
 
     fun setExpectingDisconnect(expecting: Boolean) {
@@ -531,15 +533,15 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
 
                     Log.d(TAG, "Publicando BPM: $it (Usuário: $userId, Exercício: $exerciseId, Zona: $selectedZone, Rating: $desempenhoPct)")
                     MqttManager.publishSensorData(
-                        groupId,
-                        userId,
-                        exerciseId,
-                        "ppg",
-                        it,
-                        selectedZone,
-                        zonas,
-                        _desempenhoPct.value,
-                        nome
+                        groupId = groupId,
+                        userId = userId,
+                        exerciseId = exerciseId,
+                        source = "ppg",
+                        value = it,
+                        selectedZone = selectedZone,
+                        zonas = zonas,
+                        rating = _desempenhoPct.value, // Corrigido: Passa o rating como Float?
+                        nome = nome // Passa o nome como String?
                     )
                 }
             } else {
@@ -570,14 +572,15 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
                     }
                     saveToFile(raw)
                     MqttManager.publishSensorData(
-                        groupId,
-                        userId,
-                        exerciseId,
-                        source,
-                        temp,
-                        selectedZone,
-                        zonas,
-                        nome)
+                        groupId = groupId,
+                        userId = userId,
+                        exerciseId = exerciseId,
+                        source = source,
+                        value = temp,
+                        selectedZone = selectedZone,
+                        zonas = zonas,
+                        nome = nome 
+                        )
                 } else {
                     Log.e(TAG, "Erro ao parsear dados de temperatura: $raw")
                 }

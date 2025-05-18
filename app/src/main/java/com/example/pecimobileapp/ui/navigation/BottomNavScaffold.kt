@@ -55,7 +55,8 @@ fun BottomNavScaffold(
                 zonasList = zonasAtualizadas,
                 group = realTimeViewModel.groupId.value,
                 user = userId,
-                exercise = realTimeViewModel.exerciseId.value
+                exercise = realTimeViewModel.exerciseId.value,
+                nome = profileViewModel.nome
             )
         }
     }

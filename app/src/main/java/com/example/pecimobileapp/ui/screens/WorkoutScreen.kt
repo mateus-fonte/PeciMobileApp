@@ -115,6 +115,7 @@ fun WorkoutScreen(
                     nome = nomeParticipante
                 )
                 realTimeViewModel.startActivity()
+                groupId?.let { realTimeViewModel.subscribeToGroup(it) }
                 isInitialized = true
             } catch (e: Exception) {
                 Log.e("WorkoutScreen", "Erro ao inicializar sessão", e)
@@ -294,58 +295,58 @@ fun WorkoutScreen(
         }
             // Participantes do grupo (exceto o próprio)
         if (groupId != null) {
-            Spacer(Modifier.height(16.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp, horizontal = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
-                    Spacer(Modifier.height(4.dp))
-                    Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(16.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
+            Spacer(Modifier.height(4.dp))
+            Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(Modifier.height(8.dp))
 
-                    outrosParticipantes
-                        .toSortedMap(compareBy { it.lowercase() })
-                        .forEach { (nome, data) ->
-                            val rating = data.rating.coerceIn(0f, 100f)
-                            val zona = data.zonaAlvo
-                            val corZona = zoneColors[zona] ?: Color.Gray
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(nome, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
-                                Slider(
-                                    value = rating,
-                                    onValueChange = {},
-                                    enabled = false,
-                                    valueRange = 0f..100f,
-                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = Color.White,
-                                        activeTrackColor = corZona,
-                                        inactiveTrackColor = corZona.copy(alpha = 0.3f),
-                                        disabledThumbColor = Color.White,
-                                        disabledActiveTrackColor = corZona,
-                                        disabledInactiveTrackColor = corZona.copy(alpha = 0.3f)
-                                    )
-                                )
-                                Text("${rating.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
-                            }
-                        }
+            outrosParticipantes
+                .toSortedMap(compareBy { it.lowercase() })
+                .forEach { (nome, data) ->
+                    val rating = data.rating.coerceIn(0f, 100f)
+                    val zona = data.zonaAlvo
+                    val corZona = zoneColors[zona] ?: Color.Gray
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(nome, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
+                        Slider(
+                            value = rating,
+                            onValueChange = {},
+                            enabled = false,
+                            valueRange = 0f..100f,
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color.White,
+                                activeTrackColor = corZona,
+                                inactiveTrackColor = corZona.copy(alpha = 0.3f),
+                                disabledThumbColor = Color.White,
+                                disabledActiveTrackColor = corZona,
+                                disabledInactiveTrackColor = corZona.copy(alpha = 0.3f)
+                            )
+                        )
+                        Text("${rating.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+                    }
                 }
-            }
         }
+    }
+}
 
         // Diálogo: Resetar treino
         if (showResetDialog) {

@@ -24,6 +24,7 @@ class RealTimeViewModel(
     private val bleManager = bleProvider.getBleManager()
     private val wsService = WebSocketServerService(app)
     private val _nome = MutableStateFlow<String?>(null)
+
     val nome: StateFlow<String?> = _nome
 
 
@@ -32,8 +33,8 @@ class RealTimeViewModel(
 
     val desempenhoPct: StateFlow<Float> = bleManager.desempenhoPct
 
-    private val _outrosParticipantes = MutableStateFlow<Map<String, Float>>(emptyMap())
-    val outrosParticipantes: StateFlow<Map<String, Float>> = _outrosParticipantes
+    private val _outrosParticipantes = MutableStateFlow<Map<String, ParticipanteData>>(emptyMap())
+    val outrosParticipantes: StateFlow<Map<String, ParticipanteData>> = _outrosParticipantes
 
     private val _isPpgConnected = MutableStateFlow(false)
     val isPpgConnected: StateFlow<Boolean> = _isPpgConnected
@@ -228,10 +229,35 @@ class RealTimeViewModel(
         }
     }
 
+    fun subscribeToGroup(groupId: String) {
+    MqttManager.subscribe("/group/$groupId/data") { message ->
+        try {
+            val json = org.json.JSONObject(message)
+            val nome = json.optString("nome", json.optString("user_uid", ""))
+            val rating = json.optDouble("rating", 0.0).toFloat()
+            val zonaAlvo = json.optInt("zona_alvo", 0)
+            val userId = json.optString("user_uid", "")
+
+            // Não atualize o próprio usuário
+            if (userId != _userId.value) {
+                val updated = _outrosParticipantes.value.toMutableMap()
+                updated[nome] = ParticipanteData(rating, zonaAlvo)
+                _outrosParticipantes.value = updated
+            }
+        } catch (e: Exception) {
+            Log.e("RealTimeViewModel", "Erro ao processar mensagem do grupo", e)
+        }
+    }
+}
+
 
     fun updateParticipanteRating(userId: String, rating: Float) {
     val updatedMap = _outrosParticipantes.value.toMutableMap()
-    updatedMap[userId] = rating
+    val participanteAtual = updatedMap[userId]
+    updatedMap[userId] = ParticipanteData(
+        rating = rating,
+        zonaAlvo = participanteAtual?.zonaAlvo ?: 0 // Mantém a zona atual ou usa 0 como padrão
+    )
     _outrosParticipantes.value = updatedMap
 }
 
@@ -257,3 +283,7 @@ class RealTimeViewModel(
 
     fun getBleManager(): BleManager = bleManager
 }
+data class ParticipanteData(
+    val rating: Float,
+    val zonaAlvo: Int
+)

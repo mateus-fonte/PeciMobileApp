@@ -57,6 +57,7 @@ fun DefineWorkoutScreen(navController: NavController) {
     val focusManager = LocalFocusManager.current
     var debounceJob by remember { mutableStateOf<Job?>(null) }
     val scrollState = rememberScrollState()
+    var lastCheckedGroup by remember { mutableStateOf("") }
 
     val zones = listOf(
         Triple(1, "Z1 (Recuperação)", AerobicEndurance),
@@ -74,14 +75,15 @@ fun DefineWorkoutScreen(navController: NavController) {
 
     // Escuta para respostas de validação do grupo
     LaunchedEffect(Unit) {
-        mqttManager.subscribe("/group/check_response") { message ->
-            val response = JSONObject(message)
-            if (response.getString("group_id") == groupNameInput.trim()) {
-                isGroupValid = response.getBoolean("exists")
-                isCheckingGroup = false
-            }
+    mqttManager.subscribe("/group/check_response") { message ->
+        val response = JSONObject(message)
+        val responseGroup = response.getString("group_id")
+        if (responseGroup == lastCheckedGroup) {
+            isGroupValid = response.getBoolean("exists")
+            isCheckingGroup = false
         }
     }
+}
 
     // Cancela o debounce ao sair do modo "entrar"
     DisposableEffect(workoutMode) {
@@ -174,13 +176,15 @@ fun DefineWorkoutScreen(navController: NavController) {
                         debounceJob?.cancel()
                         debounceJob = scope.launch {
                             delay(500)
+                            val groupToCheck = it.trim()
+                            lastCheckedGroup = groupToCheck
                             val payload = JSONObject().apply {
-                                put("group_id", it.trim())
+                                put("group_id", groupToCheck)
                             }
                             mqttManager.publish("/group/check", payload.toString())
 
-                            delay(5000)
-                            if (isCheckingGroup) {
+                            delay(8000)
+                            if (isCheckingGroup && lastCheckedGroup == groupToCheck) {
                                 isCheckingGroup = false
                                 isGroupValid = false
                             }

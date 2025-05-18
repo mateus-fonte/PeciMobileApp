@@ -129,8 +129,6 @@ fun publishSensorData(
             put("user_uid", userId)
             put("group_id", groupId)
             put("exercise_id", exerciseId)
-            put("zona_alvo", selectedZone)
-            put("nome", nome)
         }
 
         // Payload para /group/{groupId}/data (rating)
@@ -140,6 +138,7 @@ fun publishSensorData(
             put("group_id", groupId)
             put("exercise_id", exerciseId)
             put("zona_alvo", selectedZone) // Adiciona a zona alvo ao payload do grupo
+            put("nome", nome)
         }
 
         val topicGroup = "/group/$groupId/data"
