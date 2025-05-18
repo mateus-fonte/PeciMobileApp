@@ -3,21 +3,18 @@
  * Conexões:
  * - MLX90640 e DS3231: Conectados via I2C nos pinos definidos (14/15)
  * - Câmera: Conectada às portas padrão do ESP32-CAM
- *
- * Formato:
+ * * Formato:
  * - Timestamp:
  * 4 bytes: timestamp em formato epoch (uint_32) extraído do RTC
  * 2 bytes: millis()%1000 (uint16_t) formatado sempre com 3 caracteres (se for 1 é formatado como 001)
  * 
  * - Mensagem foto:
- * 1º campo (1 byte): 0x01
- * 2º campo (6 bytes): timestamp usando o formato mencionado 
- * 3º campo: foto em binário
+ * Foto em formato JPEG enviada diretamente como dados binários
+ * (Tamanho da mensagem varia conforme a resolução e qualidade da imagem, geralmente será maior)
  *
  * - Mensagem matriz térmica:
- * 1º campo (1 byte): 0x02
- * 2º campo (6 bytes): timestamp usando o formato mencionado
- * 3º campo: matriz 32x24 de floats em binário
+ * Matriz 32x24 de floats em binário (3072 bytes = 768 pixels * 4 bytes por float)
+ * O servidor identifica o tipo da mensagem pelo seu tamanho
  **/
 
 #include <Arduino.h>
@@ -511,13 +508,10 @@ void send_data() {
     Serial.println("[CAM] ERRO: Falha ao capturar imagem!");
     return;
   }
-  // Enviar primeiro o cabeçalho e depois os dados da imagem separadamente
-  // Isso evita a necessidade de alocar um buffer grande na memória
-  uint8_t header_img = 0x01; // Header para imagem
-  webSocket.sendBIN(&header_img, 1);
+  // Enviar os dados da imagem diretamente (sem cabeçalho separado)
   webSocket.sendBIN(fb->buf, fb->len);
   
-  Serial.printf("[WEBSOCKET] Imagem enviada: %u bytes\n", (unsigned int)(1 + fb->len));
+  Serial.printf("[WEBSOCKET] Imagem enviada: %u bytes\n", (unsigned int)(fb->len));
   
   // Liberar o buffer da câmera imediatamente após o uso
   esp_camera_fb_return(fb);
@@ -528,12 +522,9 @@ void send_data() {
     Serial.println("[MLX] ERRO: Falha ao ler o frame térmico!");
     return;
   }
-  // Enviar dados térmicos [0x02][float array]
-  // Dividir em duas etapas para evitar grandes alocações de memória
-  uint8_t header_thermal = 0x02; // Header para dados térmicos
-  webSocket.sendBIN(&header_thermal, 1);
+  // Enviar dados térmicos diretamente (sem cabeçalho separado)
   webSocket.sendBIN((uint8_t*)frameTemp, sizeof(frameTemp));
-    Serial.printf("[WEBSOCKET] Dados térmicos enviados: %u bytes\n", (unsigned int)(1 + sizeof(frameTemp)));
+  Serial.printf("[WEBSOCKET] Dados térmicos enviados: %u bytes\n", (unsigned int)(sizeof(frameTemp)));
 
   // Calcular estatísticas térmicas para uso interno/debug
   float sumTemp = 0;
