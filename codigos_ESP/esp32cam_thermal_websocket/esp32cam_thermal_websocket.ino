@@ -205,7 +205,7 @@ void setup_webSocket() {
 
 void send_data() {
     if (!isConnected) return;
-
+    
     // Capturar imagem
     camera_fb_t* fb = esp_camera_fb_get();
     if (!fb) return;
