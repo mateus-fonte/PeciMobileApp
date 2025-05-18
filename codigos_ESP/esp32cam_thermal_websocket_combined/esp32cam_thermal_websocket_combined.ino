@@ -543,7 +543,7 @@ void send_data() {
 
 //----------INSERIR CÓDIGO CONFIGURAÇÃO DO SENSOR AQUI------------
 int setup_sensor() {
-  Wire.setClock(100000); // velocidade standart mode (útil com múltiplos sensores na mesma linha)
+  Wire.setClock(50000); // Velocidade reduzida para melhorar estabilidade com resistores pull-up de 1kΩ
   
   // Inicializa o MLX90640
   if (!mlx.begin(MLX90640_I2CADDR_DEFAULT, &Wire)) {
