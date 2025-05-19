@@ -25,6 +25,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.ConnectException
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.*
 import kotlin.concurrent.thread
 import java.net.Inet4Address
@@ -578,7 +579,7 @@ class WebSocketServerService(private val context: Context) {
                 Log.e(TAG, "Erro ao enviar confirmação de texto", e)
             }
         }
-          override fun onMessage(conn: WebSocket, message: ByteBuffer) {
+        override fun onMessage(conn: WebSocket, message: ByteBuffer) {
             Log.d(TAG, "Dados binários recebidos de ${conn.remoteSocketAddress}, tamanho: ${message.remaining()} bytes")
             
             _connectionStats.value = _connectionStats.value.copy(
@@ -586,7 +587,8 @@ class WebSocketServerService(private val context: Context) {
             )
             
             try {
-                val byteArray = ByteArray(message.remaining())
+                val messageSize = message.remaining()
+                val byteArray = ByteArray(messageSize)
                 message.get(byteArray)
                 
                 // Enviar confirmação antes de processar para evitar timeout
@@ -598,8 +600,16 @@ class WebSocketServerService(private val context: Context) {
                     Log.e(TAG, "Erro ao enviar confirmação binária", e)
                 }
                 
-                // Processar os dados binários recebidos
-                processReceivedData(byteArray)
+                // Identificar tipo de mensagem pelo tamanho
+                val thermalDataSize = 32 * 24 * 4  // 3072 bytes (768 floats * 4 bytes por float)
+                
+                if (messageSize == thermalDataSize) {
+                    // Processar como dados térmicos
+                    processThermalData(byteArray)
+                } else {
+                    // Processar como imagem da câmera
+                    processCameraImage(byteArray)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao processar mensagem binária", e)
             }
@@ -631,38 +641,19 @@ class WebSocketServerService(private val context: Context) {
             _isRunning = false
         }
     }
-    
-    /**
-     * Processa os dados binários recebidos via WebSocket
+      /**
+     * Método anterior que processava os dados com cabeçalho
+     * Mantido apenas como referência e não é mais utilizado
+     * O processamento agora é feito diretamente pelos métodos:
+     * - processThermalData()
+     * - processCameraImage() 
      */
+    /*
     private fun processReceivedData(data: ByteArray) {
-        try {
-            val wsData = WebSocketData.parseFromBinary(data) ?: return
-            
-            Log.d(TAG, "Dados recebidos: tipo=${wsData.type}, timestamp=${wsData.getFormattedTimestamp()}")
-            
-            when (wsData.type) {
-                WebSocketData.DataType.CAMERA_IMAGE -> {
-                    val imageBytes = wsData.data as ByteArray
-                    val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                    _latestCameraImage.value = Pair(bitmap, wsData.getFormattedTimestamp())
-                    
-                    // Tentar processar a imagem com OpenCV se tivermos tanto a imagem quanto os dados térmicos
-                    processImageWithOpenCV()
-                }
-                
-                WebSocketData.DataType.THERMAL_DATA -> {
-                    val thermalData = wsData.data as FloatArray
-                    _latestThermalData.value = Pair(thermalData, wsData.getFormattedTimestamp())
-                    
-                    // Tentar processar a imagem com OpenCV se tivermos tanto a imagem quanto os dados térmicos
-                    processImageWithOpenCV()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao processar dados binários", e)
-        }
+        // Este método não é mais utilizado
+        // O processamento agora depende do tamanho da mensagem para identificar o tipo
     }
+    */
     
     /**
      * Processa a imagem da câmera com OpenCV e sobrepõe dados térmicos
@@ -694,6 +685,67 @@ class WebSocketServerService(private val context: Context) {
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao processar imagem com OpenCV", e)
             }
+        }
+    }
+    
+    /**
+     * Processa os dados térmicos recebidos diretamente sem cabeçalho
+     * @param rawData Array de bytes contendo matriz 32x24 de floats
+     */
+    private fun processThermalData(rawData: ByteArray) {
+        try {
+            Log.d(TAG, "Processando dados térmicos de ${rawData.size} bytes")
+            
+            // Converter os bytes brutos para FloatArray
+            val thermalData = FloatArray(32 * 24) // 768 floats
+            val buffer = ByteBuffer.wrap(rawData).order(ByteOrder.LITTLE_ENDIAN)
+            
+            for (i in thermalData.indices) {
+                thermalData[i] = buffer.getFloat()
+            }
+            
+            // Calculando timestamp atual para referência
+            val timestamp = System.currentTimeMillis().toString()
+            
+            // Atualizar os dados térmicos
+            _latestThermalData.value = Pair(thermalData, timestamp)
+            
+            // Tentar processar a imagem com OpenCV
+            processImageWithOpenCV()
+            
+            Log.d(TAG, "Dados térmicos processados com sucesso")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao processar dados térmicos", e)
+        }
+    }
+    
+    /**
+     * Processa a imagem da câmera recebida diretamente sem cabeçalho
+     * @param rawData Array de bytes contendo a imagem JPEG
+     */
+    private fun processCameraImage(rawData: ByteArray) {
+        try {
+            Log.d(TAG, "Processando imagem da câmera de ${rawData.size} bytes")
+            
+            // Decodificar a imagem JPEG diretamente dos bytes
+            val bitmap = BitmapFactory.decodeByteArray(rawData, 0, rawData.size)
+            
+            if (bitmap != null) {
+                // Calculando timestamp atual para referência
+                val timestamp = System.currentTimeMillis().toString()
+                
+                // Atualizar a imagem da câmera
+                _latestCameraImage.value = Pair(bitmap, timestamp)
+                
+                // Tentar processar a imagem com OpenCV
+                processImageWithOpenCV()
+                
+                Log.d(TAG, "Imagem da câmera processada com sucesso: ${bitmap.width}x${bitmap.height}")
+            } else {
+                Log.e(TAG, "Falha ao decodificar a imagem da câmera")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao processar imagem da câmera", e)
         }
     }
     
