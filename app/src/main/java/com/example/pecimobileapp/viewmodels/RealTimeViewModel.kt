@@ -21,17 +21,18 @@ class RealTimeViewModel(
     app: Application
     ) : AndroidViewModel(app) {
     private val bleProvider = BleManagerProvider.getInstance()
-    private val bleManager = bleProvider.getBleManager()
+    private val ppgManager = bleProvider.getBleManager(DeviceType.PPG)
+    private val camManager = bleProvider.getBleManager(DeviceType.THERMAL_CAMERA)
     private val wsService = WebSocketServerService(app)
     private val _nome = MutableStateFlow<String?>(null)
 
     val nome: StateFlow<String?> = _nome
 
 
-    val scanResultsPpg: StateFlow<List<ScanResult>> = bleManager.scanResults
-    val scanResultsCam: StateFlow<List<ScanResult>> = bleManager.scanResults
+    val scanResultsPpg: StateFlow<List<ScanResult>> = ppgManager.scanResults
+    val scanResultsCam: StateFlow<List<ScanResult>> = camManager.scanResults
 
-    val desempenhoPct: StateFlow<Float> = bleManager.desempenhoPct
+    val desempenhoPct: StateFlow<Float> = ppgManager.desempenhoPct
 
     private val _outrosParticipantes = MutableStateFlow<Map<String, ParticipanteData>>(emptyMap())
     val outrosParticipantes: StateFlow<Map<String, ParticipanteData>> = _outrosParticipantes
@@ -48,10 +49,10 @@ class RealTimeViewModel(
     private val _camConnectionLost = MutableStateFlow(false)
     val camConnectionLost: StateFlow<Boolean> = _camConnectionLost
 
-    val ppgHeartRate: StateFlow<Int?> = bleManager.ppgHeartRate
-    val avgTemp: StateFlow<Float?> = bleManager.avgTemp
-    val maxTemp: StateFlow<Float?> = bleManager.maxTemp
-    val minTemp: StateFlow<Float?> = bleManager.minTemp
+    val ppgHeartRate: StateFlow<Int?> = ppgManager.ppgHeartRate
+    val avgTemp: StateFlow<Float?> = camManager.avgTemp
+    val maxTemp: StateFlow<Float?> = camManager.maxTemp
+    val minTemp: StateFlow<Float?> = camManager.minTemp
 
     private val _scanning = MutableStateFlow(false)
     val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
@@ -94,40 +95,29 @@ class RealTimeViewModel(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
     init {
-        // Observar mudanças de conexão através do viewModelScope
-        viewModelScope.launch {
-            bleManager.isConnected.collect { isConnected ->
-                when (bleManager.currentDeviceType) {
-                    DeviceType.PPG -> {
-                        _isPpgConnected.value = isConnected
-                        if (!isConnected) {
-                            _ppgConnectionLost.value = true
-                        }
-                    }
-                    DeviceType.THERMAL_CAMERA -> {
-                        _isCamConnected.value = isConnected
-                        if (!isConnected) {
-                            _camConnectionLost.value = true
-                        }
-                    }
-                    null -> {
-                        // Device type not set
-                    }
-                }
-            }
-        }
-
-        // Observar perda de conexão
-        viewModelScope.launch {
-            bleManager.connectionLost.collect { isLost ->
-                when (bleManager.currentDeviceType) {
-                    DeviceType.PPG -> _ppgConnectionLost.value = isLost
-                    DeviceType.THERMAL_CAMERA -> _camConnectionLost.value = isLost
-                    null -> {}
-                }
-            }
+    viewModelScope.launch {
+        ppgManager.isConnected.collect { isConnected ->
+            _isPpgConnected.value = isConnected
+            if (!isConnected) _ppgConnectionLost.value = true
         }
     }
+    viewModelScope.launch {
+        camManager.isConnected.collect { isConnected ->
+            _isCamConnected.value = isConnected
+            if (!isConnected) _camConnectionLost.value = true
+        }
+    }
+    viewModelScope.launch {
+        ppgManager.connectionLost.collect { isLost ->
+            _ppgConnectionLost.value = isLost
+        }
+    }
+    viewModelScope.launch {
+        camManager.connectionLost.collect { isLost ->
+            _camConnectionLost.value = isLost
+        }
+    }
+}
 
 
     fun loadUserProfile(context: Context) {
@@ -144,13 +134,13 @@ class RealTimeViewModel(
 }
 
     fun connectPpg(device: BluetoothDevice) {
-        bleManager.connectPpg(device)
+        ppgManager.connectPpg(device)
         _isPpgConnected.value = true
         _ppgConnectionLost.value = false
     }
 
     fun connectCam(device: BluetoothDevice) {
-        bleManager.connectCam(device)
+        camManager.connectCam(device)
         _isCamConnected.value = true
         _camConnectionLost.value = false
     }
@@ -158,7 +148,7 @@ class RealTimeViewModel(
     fun startPpgScan() {
         viewModelScope.launch {
             _scanning.value = true
-            bleManager.startScan()
+            ppgManager.startScan()
             kotlinx.coroutines.delay(10000) // 10 segundos
             _scanning.value = false
         }
@@ -167,7 +157,7 @@ class RealTimeViewModel(
     fun startCamScan() {
         viewModelScope.launch {
             _scanning.value = true
-            bleManager.startScan()
+            camManager.startScan()
             kotlinx.coroutines.delay(10000) // 10 segundos
             _scanning.value = false
         }
@@ -175,22 +165,24 @@ class RealTimeViewModel(
 
     fun startActivity() {
         _activityStarted.value = true
-        bleManager.startActivity()
+        ppgManager.startActivity()
+        camManager.startActivity()
     }
 
     fun stopActivity() {
         _activityStarted.value = false
-        bleManager.stopActivity()
+        ppgManager.stopActivity()
+        camManager.stopActivity()
     }
 
     fun disconnectPpg() {
-        bleManager.disconnect()
+        ppgManager.disconnect()
         _isPpgConnected.value = false
         _ppgConnectionLost.value = true
     }
 
     fun disconnectCam() {
-        bleManager.disconnect()
+        camManager.disconnect()
         _isCamConnected.value = false
         _camConnectionLost.value = true
     }
@@ -214,13 +206,15 @@ class RealTimeViewModel(
     _exerciseId.value = exercise
     _nome.value = nome
 
-    bleManager.setSessionParameters(group, user, exercise, zone, zonasList, nome)
+    ppgManager.setSessionParameters(group, user, exercise, zone, zonasList, nome)
+    camManager.setSessionParameters(group, user, exercise, zone, zonasList, nome)
 }
 
     fun prepareForWorkout() {
         viewModelScope.launch(Dispatchers.IO) { // Certifique-se de usar Dispatchers.IO
             try {
-                bleManager.startActivity()
+                ppgManager.startActivity()
+                camManager.startActivity()
                 MqttManager.connect()
                 Log.d("RealTimeViewModel", "Preparação para treino concluída")
             } catch (e: Exception) {
@@ -262,17 +256,15 @@ class RealTimeViewModel(
 }
 
     fun sendAllConfigs(
-        ssid: String,
-        password: String
-    ) = viewModelScope.launch {
-        val ip = accessPointIp.value
-        // Using default port 8080 since we don't have access to WebSocketViewModel
-        val currentPort = 8080
-        // Use port with IP address
-        val ipWithPort = "$ip:$currentPort"
-        android.util.Log.d("RealTimeViewModel", "Enviando IP com porta: $ipWithPort")
-        bleManager.sendAllConfigs(ssid, password, ipWithPort)
-    }
+    ssid: String,
+    password: String
+) = viewModelScope.launch {
+    val ip = accessPointIp.value
+    val currentPort = 8080
+    val ipWithPort = "$ip:$currentPort"
+    android.util.Log.d("RealTimeViewModel", "Enviando IP com porta: $ipWithPort")
+    camManager.sendAllConfigs(ssid, password, ipWithPort)
+}
 
     fun resetSession() {
         _outrosParticipantes.value = emptyMap()
@@ -281,7 +273,6 @@ class RealTimeViewModel(
         Log.d("RealTimeViewModel", "Sessão redefinida")
     }
 
-    fun getBleManager(): BleManager = bleManager
 }
 data class ParticipanteData(
     val rating: Float,

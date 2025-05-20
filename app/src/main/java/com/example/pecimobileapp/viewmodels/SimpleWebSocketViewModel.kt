@@ -15,7 +15,7 @@ import kotlinx.coroutines.withTimeout
 
 class SimpleWebSocketViewModel(application: Application) : AndroidViewModel(application) {
     private val wsService = SimpleWebSocketService(application.applicationContext)
-    private val bleManager = BleManagerProvider.getInstance().getBleManager()
+    private val bleManager = BleManagerProvider.getInstance().getBleManager(DeviceType.THERMAL_CAMERA)
     
     private val _setupProgress = MutableStateFlow(0f)
     val setupProgress: StateFlow<Float> = _setupProgress
