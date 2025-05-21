@@ -471,6 +471,23 @@ class OpenCVUtils(private val context: Context) {
     }
     
     /**
+    * Calcula a temperatura média de toda a matriz térmica
+    */
+    private fun calculateAverageTemperature(thermalData: FloatArray): Float {
+        var sum = 0f
+        var count = 0
+        
+        for (temp in thermalData) {
+            if (!temp.isNaN() && temp > 0) {
+                sum += temp
+                count++
+            }
+        }
+        
+        return if (count > 0) sum / count else Float.NaN
+    }
+
+    /**
      * Desenha uma legenda para o mapa térmico
      */    private fun drawThermalLegend(canvas: Canvas, minTemp: Float, maxTemp: Float, width: Int, height: Int) {
         val paint = Paint().apply {
