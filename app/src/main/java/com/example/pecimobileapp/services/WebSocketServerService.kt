@@ -81,6 +81,9 @@ class WebSocketServerService(private val context: Context) {
     // Para armazenar a imagem processada com OpenCV
     private val _processedImage = MutableStateFlow<Pair<Bitmap?, List<OpenCVUtils.FaceData>>>(Pair(null, emptyList()))
     val processedImage: StateFlow<Pair<Bitmap?, List<OpenCVUtils.FaceData>>> = _processedImage
+
+    // Flag para controlar se deve mostrar apenas imagem térmica
+    private var showOnlyThermal: Boolean = true
     
     // Métricas de conexão
     private val _connectionStats = MutableStateFlow(ConnectionStats())
@@ -653,18 +656,31 @@ class WebSocketServerService(private val context: Context) {
         // Este método não é mais utilizado
         // O processamento agora depende do tamanho da mensagem para identificar o tipo
     }
-    */
-    
-    /**
+    */    /**
      * Processa a imagem da câmera com OpenCV e sobrepõe dados térmicos
+     * Se não houver imagem da câmera mas houver dados térmicos, cria uma imagem a partir dos dados térmicos
+     * Se showOnlyThermal=true, sempre cria imagem apenas com dados térmicos, mesmo se houver imagem da câmera
      */
     private fun processImageWithOpenCV() {
         val cameraImage = _latestCameraImage.value.first
         val thermalData = _latestThermalData.value.first
         
-        if (cameraImage != null) {
-            try {
-                // Processar a imagem com detecção facial e dados térmicos
+        try {
+            // Se temos dados térmicos e o modo de apenas térmico está ativado, sempre usar processOnlyThermalData
+            if (showOnlyThermal && thermalData != null) {
+                // Criar imagem apenas a partir dos dados térmicos com 100% de opacidade
+                Log.d(TAG, "Criando imagem apenas a partir dos dados térmicos (modo térmico exclusivo)")
+                val result = openCVUtils.processOnlyThermalData(thermalData)
+                _processedImage.value = result
+                
+                // Atualiza as estatísticas de conexão
+                _connectionStats.value = _connectionStats.value.copy(
+                    detectedFaces = result.second.size
+                )
+                
+                Log.d(TAG, "Processamento de dados térmicos concluído")
+            } else if (cameraImage != null) {
+                // Caso normal: Processar a imagem com detecção facial e dados térmicos
                 Log.d(TAG, "Iniciando processamento de imagem com OpenCV")
                 val result = openCVUtils.processImagesWithFaceDetection(cameraImage, thermalData)
                 _processedImage.value = result
@@ -682,17 +698,23 @@ class WebSocketServerService(private val context: Context) {
                         Log.d(TAG, "Temperatura facial: ${String.format("%.1f°C", faceData.temperature)}")
                     }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Erro ao processar imagem com OpenCV", e)
+            } else if (thermalData != null) {
+                // Caso especial: Criar imagem apenas a partir dos dados térmicos
+                Log.d(TAG, "Criando imagem apenas a partir dos dados térmicos (sem imagem da câmera)")
+                val result = openCVUtils.processOnlyThermalData(thermalData)
+                _processedImage.value = result
+                
+                Log.d(TAG, "Processamento de dados térmicos concluído")
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao processar imagem com OpenCV", e)
         }
     }
     
     /**
      * Processa os dados térmicos recebidos diretamente sem cabeçalho
      * @param rawData Array de bytes contendo matriz 32x24 de floats
-     */
-    private fun processThermalData(rawData: ByteArray) {
+     */    private fun processThermalData(rawData: ByteArray) {
         try {
             Log.d(TAG, "Processando dados térmicos de ${rawData.size} bytes")
             
@@ -711,6 +733,7 @@ class WebSocketServerService(private val context: Context) {
             _latestThermalData.value = Pair(thermalData, timestamp)
             
             // Tentar processar a imagem com OpenCV
+            // Se não houver uma imagem da câmera, será criada uma imagem a partir dos dados térmicos
             processImageWithOpenCV()
             
             Log.d(TAG, "Dados térmicos processados com sucesso")
@@ -746,6 +769,23 @@ class WebSocketServerService(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao processar imagem da câmera", e)
+        }
+    }
+      /**
+     * Define se deve processar apenas a imagem térmica com 100% de opacidade
+     * @param enable True para mostrar apenas imagem térmica, False para sobrepor na imagem da câmera
+     */
+    fun setShowOnlyThermal(enable: Boolean) {
+        Log.d(TAG, "Alterando modo de visualização térmica para: ${if (enable) "Apenas térmica" else "Sobreposição normal"}")
+        showOnlyThermal = enable
+        
+        // Reprocessar a imagem atual se houver dados disponíveis
+        val thermalData = _latestThermalData.value.first
+        if (thermalData != null) {
+            Log.d(TAG, "Reprocessando dados térmicos existentes com a nova configuração")
+            processImageWithOpenCV()
+        } else {
+            Log.d(TAG, "Não há dados térmicos disponíveis para reprocessar")
         }
     }
     

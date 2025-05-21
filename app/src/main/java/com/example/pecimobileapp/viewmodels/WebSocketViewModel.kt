@@ -91,6 +91,20 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     // Imagem processada com OpenCV (com detecção facial e sobreposição térmica)
     val processedImage: StateFlow<Pair<Bitmap?, List<OpenCVUtils.FaceData>>> = webSocketServer.processedImage
 
+    // Flag para controlar se deve mostrar apenas imagem térmica com 100% de opacidade
+    private val _showOnlyThermal = MutableStateFlow(true)
+    val showOnlyThermal: StateFlow<Boolean> = _showOnlyThermal
+
+    /**
+     * Ativa ou desativa a exibição apenas da imagem térmica com opacidade 100%
+     * @param enable True para mostrar apenas imagem térmica, False para mostrar sobreposição normal
+     */
+    fun setShowOnlyThermal(enable: Boolean) {
+        _showOnlyThermal.value = enable
+        // Atualiza o serviço WebSocket com a nova configuração
+        webSocketServer.setShowOnlyThermal(enable)
+    }
+
     /**
      * Verifica se a permissão BLUETOOTH_CONNECT está concedida
      * @return true se a permissão está concedida, false caso contrário
@@ -262,11 +276,13 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
         }
         
         return null
-    }
-    
-    // Inicializa o monitoramento de imagens recebidas
+    }    // Inicializa o monitoramento de imagens recebidas
     init {
         Log.d(TAG, "Inicializando WebSocketViewModel com BleManager compartilhado")
+        
+        // Garantir que o modo de visualização térmica esteja ativado desde o início
+        setShowOnlyThermal(true)
+        Log.d(TAG, "Modo de visualização térmica exclusiva ativado por padrão")
 
         // Observa as imagens da câmera para atualizar o status de imageReceived
         viewModelScope.launch {
@@ -274,6 +290,17 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
                 if (bitmap != null && !_imageReceived.value) {
                     _imageReceived.value = true
                     _connectionError.value = null // Limpa qualquer erro quando uma imagem é recebida
+                }
+            }
+        }
+        
+        // Observa as imagens processadas (incluindo imagens térmicas) para atualizar o status de imageReceived
+        viewModelScope.launch {
+            processedImage.collect { (bitmap, _) ->
+                if (bitmap != null && !_imageReceived.value) {
+                    _imageReceived.value = true
+                    _connectionError.value = null // Limpa qualquer erro quando uma imagem é recebida
+                    Log.d(TAG, "Imagem térmica processada recebida, atualizando imageReceived")
                 }
             }
         }

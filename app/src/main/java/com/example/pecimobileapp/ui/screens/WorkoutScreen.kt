@@ -111,6 +111,9 @@ fun WorkoutScreen(
 
     LaunchedEffect(Unit) {
     try {
+        // Configurar para modo térmico exclusivo
+        com.example.pecimobileapp.services.ThermalViewUtils.setupThermalOnlyMode(wsViewModel)
+        
         Log.d("WorkoutScreen", "Resetando sessão antes de iniciar nova atividade")
         realTimeViewModel.resetSession()
         Log.d("WorkoutScreen", "Chamando setWorkoutParameters")
