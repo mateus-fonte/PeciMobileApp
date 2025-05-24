@@ -205,6 +205,7 @@ fun WorkoutScreen(
         }
 
         // Batimentos cardíacos
+        /* COMMENT FOR TC DEBUG */
         Box(
             Modifier.fillMaxWidth().height(160.dp).background(currentZoneColor),
             contentAlignment = Alignment.CenterStart
@@ -230,9 +231,41 @@ fun WorkoutScreen(
                 )
             }
         }
-
-        // Temperatura média + acesso à imagem térmica
+        
+        // Temperatura ble
         if (isCamConnected) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .background(Color(0xFF7451A6))
+                    .padding(horizontal = 36.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Thermostat, contentDescription = "Temp", tint = Color.White)
+                    Spacer(Modifier.width(28.dp))
+                    Text(
+                        text = avgTemp?.let { "%.1fº".format(it) } ?: "--.-º",
+                        fontSize = 50.sp,
+                        color = Color.White
+                    )
+                    /*Spacer(Modifier.weight(1f))
+                    Icon(
+                        Icons.Default.ArrowForward,
+                        contentDescription = "Imagem térmica",
+                        tint = if (isWsConnected && imageReceived) Color.White else Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(28.dp).let {
+                            if (isWsConnected && imageReceived) it.clickable {
+                                showThermalPreview = true
+                            } else it
+                        }
+                    )*/
+                }
+            }
+        }
+        // Temperatura websocket (média + acesso à imagem térmica)
+        if (isWsConnected) {
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -253,7 +286,7 @@ fun WorkoutScreen(
                     Icon(
                         Icons.Default.ArrowForward,
                         contentDescription = "Imagem térmica",
-                        tint = if (isWsConnected && imageReceived) Color.White else Color.White.copy(alpha = 0.4f),
+                        tint = if (imageReceived) Color.White else Color.White.copy(alpha = 0.4f),
                         modifier = Modifier.size(28.dp).let {
                             if (isWsConnected && imageReceived) it.clickable {
                                 showThermalPreview = true

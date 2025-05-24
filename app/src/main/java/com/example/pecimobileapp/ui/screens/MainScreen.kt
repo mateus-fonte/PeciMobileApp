@@ -111,6 +111,7 @@ fun MainScreen(
                     }
                 }
 
+                /* COMMENT FOR TC DEBUG */
                 !isPpgConnected -> {
                     // Caso 2: Tem ID, mas ainda não conectou o PPG
                     InstructionCard()

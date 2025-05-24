@@ -255,7 +255,15 @@ class OpenCVUtils(private val context: Context) {
      * Cria uma imagem unicamente a partir dos dados térmicos com 100% de opacidade
      * @param thermalData Matriz de dados térmicos (32x24 valores de temperatura)
      * @return Pair com imagem térmica e lista com FaceData contendo temperatura média
-     */    fun processOnlyThermalData(thermalData: FloatArray?): Pair<Bitmap, List<FaceData>> {
+     */
+     fun processOnlyThermalData(thermalData: FloatArray?): Pair<Bitmap, List<FaceData>> {
+        if (thermalData != null) {
+            val thermalWidth = 32
+            val firstRow = thermalData.sliceArray(0 until thermalWidth)
+            val allMinus999 = firstRow.all { it == -999f }
+            Log.d(TAG, "Primeira linha do thermalData: ${firstRow.joinToString(", ")}")
+            Log.d(TAG, "Primeira linha é só de -999? $allMinus999 (true = imagem não está sendo capturada)")
+        }
         if (thermalData == null) {
             // Se não houver dados térmicos, reutilizar uma imagem preta estática para economizar memória
             val emptyBitmap = Bitmap.createBitmap(640, 480, Bitmap.Config.ARGB_8888)
@@ -271,6 +279,7 @@ class OpenCVUtils(private val context: Context) {
         
         // Calcular temperatura média para FaceData virtual
         val avgTemp = calculateAverageTemperature(thermalData)
+        Log.d(TAG, "average temperature: ${thermalData}")
         val facesList = mutableListOf<FaceData>()
         
         // Adiciona um FaceData "virtual" com a temperatura média
