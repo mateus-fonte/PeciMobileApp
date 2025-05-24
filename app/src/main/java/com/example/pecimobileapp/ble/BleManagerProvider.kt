@@ -15,8 +15,9 @@ import android.util.Log
 class BleManagerProvider private constructor() {
     private val TAG = "BleManagerProvider"
     
-    // Instância única do BleManager
-    private var bleManager: BleManager? = null
+
+    private var ppgManager: BleManager? = null
+    private var camManager: BleManager? = null
     
     // Armazena os dispositivos conectados por tipo
     private val connectedDevices = mutableMapOf<DeviceType, BluetoothDevice>()
@@ -46,18 +47,19 @@ class BleManagerProvider private constructor() {
      */
     fun initialize(context: Context) {
         synchronized(this) {
-            if (bleManager == null) {
-                bleManager = BleManager(context)
-                Log.d(TAG, "BleManager inicializado com sucesso")
-            }
+            if (ppgManager == null) ppgManager = BleManager(context)
+            if (camManager == null) camManager = BleManager(context)
         }
-    }
+        }
     
     /**
      * Retorna a instância de BleManager existente, ou lança uma exceção se não inicializado.
      */
-    fun getBleManager(): BleManager {
-        return bleManager ?: throw IllegalStateException("BleManagerProvider não foi inicializado! Chame initialize(context) primeiro.")
+    fun getBleManager(type: DeviceType): BleManager {
+        return when (type) {
+            DeviceType.PPG -> ppgManager ?: throw IllegalStateException("PPG BleManager not initialized")
+            DeviceType.THERMAL_CAMERA -> camManager ?: throw IllegalStateException("Cam BleManager not initialized")
+        }
     }
     
     /**
@@ -67,19 +69,24 @@ class BleManagerProvider private constructor() {
      * @param type O tipo do dispositivo (THERMAL_CAMERA ou PPG)
      */
     fun registerConnectedDevice(device: BluetoothDevice, type: DeviceType) {
-        Log.d(TAG, "Registrando dispositivo ${device.address} como ${type.name}")
+    Log.d(TAG, "Registrando dispositivo ${device.address} como ${type.name}")
 
-        if (type == DeviceType.PPG && _ppgDevice.value != null){
-            Log.d(TAG, "Desconectando dispositivo PPG anterior para conectar ao novo")
-            getBleManager().disconnect()
-        }
-        connectedDevices[type] = device
-        
-        when (type) {
-            DeviceType.THERMAL_CAMERA -> _thermalCameraDevice.value = device
-            DeviceType.PPG -> _ppgDevice.value = device
-        }
+    // Só desconecta o PPG anterior se for do mesmo tipo
+    if (type == DeviceType.PPG && _ppgDevice.value != null){
+        Log.d(TAG, "Desconectando dispositivo PPG anterior para conectar ao novo")
+        ppgManager?.disconnect()
     }
+    if (type == DeviceType.THERMAL_CAMERA && _thermalCameraDevice.value != null) {
+        Log.d(TAG, "Desconectando câmera térmica anterior para conectar ao novo")
+        camManager?.disconnect()
+    }
+    connectedDevices[type] = device
+
+    when (type) {
+        DeviceType.THERMAL_CAMERA -> _thermalCameraDevice.value = device
+        DeviceType.PPG -> _ppgDevice.value = device
+    }
+}
     
     /**
      * Remove o registro de um dispositivo conectado.
@@ -123,27 +130,28 @@ class BleManagerProvider private constructor() {
      * @return true se a reconexão foi iniciada, false se não havia dispositivo para reconectar
      */
     fun reconnectLastDevice(type: DeviceType): Boolean {
-        val device = connectedDevices[type] ?: return false
-        
-        Log.d(TAG, "Tentando reconectar ao último dispositivo ${type.name}: ${device.address}")
-        val manager = getBleManager()
-        
-        when (type) {
-            DeviceType.THERMAL_CAMERA -> manager.connectCam(device)
-            DeviceType.PPG -> manager.connectPpg(device)
-        }
-        
-        return true
+    val device = connectedDevices[type] ?: return false
+
+    Log.d(TAG, "Tentando reconectar ao último dispositivo ${type.name}: ${device.address}")
+    val manager = getBleManager(type)
+
+    when (type) {
+        DeviceType.THERMAL_CAMERA -> manager.connectCam(device)
+        DeviceType.PPG -> manager.connectPpg(device)
     }
+
+    return true
+}
     
     /**
      * Desconecta todos os dispositivos e limpa o registro de dispositivos conectados.
      */
     fun disconnectAll() {
-        Log.d(TAG, "Desconectando todos os dispositivos")
-        getBleManager().disconnect()
-        connectedDevices.clear()
-        _thermalCameraDevice.value = null
-        _ppgDevice.value = null
+    Log.d(TAG, "Desconectando todos os dispositivos")
+    ppgManager?.disconnect()
+    camManager?.disconnect()
+    connectedDevices.clear()
+    _thermalCameraDevice.value = null
+    _ppgDevice.value = null
     }
 }

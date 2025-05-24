@@ -487,11 +487,9 @@ fun SetupScreen(
                         Button(
                             onClick = {
                                 // Tentar configurar novamente com os mesmos parâmetros
-                                val bleManager = viewModel.getBleManager()
-                                if (bleManager != null) {
                                     // Exibe diálogo para inserir SSID e senha novamente
                                     wsViewModel.prepareRetry()
-                                }
+
                             },
                             modifier = Modifier
                                 .fillMaxWidth()

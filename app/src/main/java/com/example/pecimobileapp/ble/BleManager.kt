@@ -91,6 +91,8 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     private val retryDelayMs = 5000L
     private var activityStarted = false
 
+    private var nome: String? = null
+
     private var expectingDisconnect = false
 
     fun setExpectingDisconnect(expecting: Boolean) {
@@ -124,7 +126,8 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     user: String,
     exercise: String,
     selectedZone: Int,
-    zonasList: List<Pair<String, IntRange>>
+    zonasList: List<Pair<String, IntRange>>,
+    nome: String?
 ) {
     // Se não houver grupo, use o userId como groupId para tópicos individuais
     this.groupId = group ?: user
@@ -132,6 +135,7 @@ class BleManager(private val context: Context) : BluetoothGattCallback() {
     this.exerciseId = exercise
     this.selectedZone = selectedZone
     this.zonas = zonasList
+    this.nome = nome
 }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -529,7 +533,15 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
 
                     Log.d(TAG, "Publicando BPM: $it (Usuário: $userId, Exercício: $exerciseId, Zona: $selectedZone, Rating: $desempenhoPct)")
                     MqttManager.publishSensorData(
-                        groupId, userId, exerciseId, "ppg", it, selectedZone, zonas, _desempenhoPct.value
+                        groupId = groupId,
+                        userId = userId,
+                        exerciseId = exerciseId,
+                        source = "ppg",
+                        value = it,
+                        selectedZone = selectedZone,
+                        zonas = zonas,
+                        rating = _desempenhoPct.value, // Corrigido: Passa o rating como Float?
+                        nome = nome // Passa o nome como String?
                     )
                 }
             } else {
@@ -559,7 +571,16 @@ override fun onCharacteristicChanged(g: BluetoothGatt, characteristic: Bluetooth
                         else -> "unknown"
                     }
                     saveToFile(raw)
-                    MqttManager.publishSensorData(groupId, userId, exerciseId, source, temp, selectedZone, zonas)
+                    MqttManager.publishSensorData(
+                        groupId = groupId,
+                        userId = userId,
+                        exerciseId = exerciseId,
+                        source = source,
+                        value = temp,
+                        selectedZone = selectedZone,
+                        zonas = zonas,
+                        nome = nome 
+                        )
                 } else {
                     Log.e(TAG, "Erro ao parsear dados de temperatura: $raw")
                 }

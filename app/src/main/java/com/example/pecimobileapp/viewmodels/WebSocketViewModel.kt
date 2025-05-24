@@ -45,7 +45,7 @@ class WebSocketViewModel(application: Application) : AndroidViewModel(applicatio
     private val webSocketServer = WebSocketServerService(application.applicationContext)
 
     // Usar BleManager compartilhado do Provider (já deve estar inicializado via BluetoothApplication)
-    private val bleManager = BleManagerProvider.getInstance().getBleManager()
+    private val bleManager = BleManagerProvider.getInstance().getBleManager(DeviceType.THERMAL_CAMERA)
 
     // Observável para o estado de conexão da câmera
     private val _isCameraConnected = MutableStateFlow(false)

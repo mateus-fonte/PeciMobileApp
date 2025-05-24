@@ -26,15 +26,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
+import com.example.pecimobileapp.R
 import com.example.pecimobileapp.mqtt.MqttManager
 import com.example.pecimobileapp.viewmodels.RealTimeViewModel
 import com.example.pecimobileapp.viewmodels.WebSocketViewModel
 import kotlinx.coroutines.delay
 import org.json.JSONObject
-import androidx.compose.ui.res.painterResource
-import com.example.pecimobileapp.R
-
-
 
 val zoneColors = mapOf(
     0 to Color(0xFFBDBDBD),
@@ -77,22 +74,18 @@ fun WorkoutScreen(
     userId: String,
     exerciseId: String,
     onStop: () -> Unit,
-    profileViewModel: com.example.pecimobileapp.ui.ProfileViewModel // novo parâmetro
+    profileViewModel: com.example.pecimobileapp.ui.ProfileViewModel
 ) {
-    val nome = profileViewModel.nome
     val nomeParticipante = profileViewModel.nome
-    Log.d("WorkoutScreen", "Parâmetros recebidos: selectedZone=$selectedZone, groupId=$groupId, userId=$userId, exerciseId=$exerciseId")
-    Log.d("WorkoutScreen", "RealTimeViewModel zonas=${realTimeViewModel.zonas.value}")
+    val zonas by realTimeViewModel.zonas.collectAsState()
+    val zonaAtual by realTimeViewModel.currentZone.collectAsState()
+    val desempenhoPct by realTimeViewModel.desempenhoPct.collectAsState()
+    val outrosParticipantes by realTimeViewModel.outrosParticipantes.collectAsState()
     val hr by realTimeViewModel.ppgHeartRate.collectAsState()
     val avgTemp by realTimeViewModel.avgTemp.collectAsState()
     val isCamConnected by realTimeViewModel.isCamConnected.collectAsState()
-    val isPpgConnected by realTimeViewModel.isPpgConnected.collectAsState()
     val isWsConnected by wsViewModel.isWsConnected.collectAsState()
     val imageReceived by wsViewModel.imageReceived.collectAsState()
-    val zonas by realTimeViewModel.zonas.collectAsState()
-    val zonaAtual by realTimeViewModel.currentZone.collectAsState()
-
-    val desempenhoPct by realTimeViewModel.desempenhoPct.collectAsState()
 
     var isRunning by remember { mutableStateOf(true) }
     var showStopDialog by remember { mutableStateOf(false) }
@@ -103,47 +96,35 @@ fun WorkoutScreen(
     var accumulatedTime by remember { mutableStateOf(0L) }
     var elapsed by remember { mutableStateOf(0) }
     val formattedTime = String.format("%02d:%02d:%02d", elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60)
-    val outrosParticipantes = remember { mutableStateMapOf<String, Float>() }
 
-    val zonaAlvo = selectedZone
     val zoneColor = zoneColors[selectedZone] ?: zoneColors[0]!!
     val currentZoneColor = zoneColors[zonaAtual] ?: zoneColors[0]!!
 
+    var isInitialized by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
-    try {
-        // Configurar para modo térmico exclusivo
-        com.example.pecimobileapp.services.ThermalViewUtils.setupThermalOnlyMode(wsViewModel)
+        if (!isInitialized) {
+            try {
+                // Configurar para modo térmico exclusivo
+                com.example.pecimobileapp.services.ThermalViewUtils.setupThermalOnlyMode(wsViewModel)
         
-        Log.d("WorkoutScreen", "Resetando sessão antes de iniciar nova atividade")
-        realTimeViewModel.resetSession()
-        Log.d("WorkoutScreen", "Chamando setWorkoutParameters")
-        realTimeViewModel.setWorkoutParameters(
-            zone = selectedZone,
-            zonasList = zonas,
-            group = groupId,
-            user = userId,
-            exercise = "session-${System.currentTimeMillis()}"
-        )
-        Log.d("WorkoutScreen", "Chamando startActivity")
-        realTimeViewModel.startActivity()
-        Log.d("WorkoutScreen", "Treino iniciado com sucesso")
-        // Publica zonaAlvo e nomeParticipante via MQTT
-        mqttManager?.let {
-            val nomeToSend = nomeParticipante
-            val zonaAlvoToSend = selectedZone
-            val topic = if (groupId != null) "/group/$groupId/data" else "/user/$userId/data"
-            val payload = org.json.JSONObject().apply {
-                put("user_uid", userId)
-                put("zona_alvo", zonaAlvoToSend)
-                put("nome", nomeToSend)
-                put("exercise_id", "session-${System.currentTimeMillis()}")
+                Log.d("WorkoutScreen", "Inicializando sessão com zone=$selectedZone, group=$groupId")
+                realTimeViewModel.setWorkoutParameters(
+                    zone = selectedZone,
+                    zonasList = zonas,
+                    group = groupId,
+                    user = userId,
+                    exercise = exerciseId,
+                    nome = nomeParticipante
+                )
+                realTimeViewModel.startActivity()
+                groupId?.let { realTimeViewModel.subscribeToGroup(it) }
+                isInitialized = true
+            } catch (e: Exception) {
+                Log.e("WorkoutScreen", "Erro ao inicializar sessão", e)
             }
-            it.publish(topic, payload.toString())
         }
-    } catch (e: Exception) {
-        Log.e("WorkoutScreen", "Erro ao iniciar treino", e)
     }
-}
 
     LaunchedEffect(isRunning) {
         while (isRunning) {
@@ -154,49 +135,7 @@ fun WorkoutScreen(
         }
     }
 
-    // Envio periódico via MQTT a cada 10 segundos
-    LaunchedEffect(isRunning) {
-        while (isRunning) {
-            delay(10_000L)
-            mqttManager?.let {
-                val topic = if (groupId != null) "/group/$groupId/data" else "/user/$userId/data"
-                val payload = org.json.JSONObject().apply {
-                    put("user_uid", userId)
-                    put("zona_alvo", selectedZone)
-                    put("nome", nomeParticipante)
-                    put("exercise_id", exerciseId)
-                    put("hr", hr ?: JSONObject.NULL)
-                }
-                it.publish(topic, payload.toString())
-            }
-        }
-    }
-
-    LaunchedEffect(groupId, userId) {
-    // Só faz subscribe se estiver em grupo de verdade
-    if (groupId != null && groupId != userId && mqttManager != null) {
-        mqttManager.subscribe("/group/$groupId/data") { raw ->
-            try {
-                val json = org.json.JSONObject(raw)
-                if (json.has("rating")) {
-                    val uid = json.getString("user_uid")
-                    val rating = json.getDouble("rating").toFloat()
-                    outrosParticipantes[uid] = rating
-                }
-                // Atualiza zonaAlvo e nomeParticipante dos outros participantes
-                if (json.has("zona_alvo") && json.has("nome")) {
-                    val uid = json.optString("user_uid", "")
-                    val zonaAlvoOutro = json.getInt("zona_alvo")
-                    val nomeOutro = json.getString("nome")
-                    // Você pode armazenar ou exibir essas informações conforme necessário
-                    Log.d("WorkoutScreen", "Participante: $nomeOutro (uid=$uid) está na zona $zonaAlvoOutro")
-                }
-            } catch (_: Exception) {}
-        }
-    }
-}
-
-    BackHandler {
+        BackHandler {
         isRunning = false
         startTime?.let { accumulatedTime += System.currentTimeMillis() - it }
         startTime = null
@@ -218,6 +157,7 @@ fun WorkoutScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Header: controles e tempo
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -247,50 +187,51 @@ fun WorkoutScreen(
             Text(formattedTime, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
         }
 
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().height(52.dp)) {
-                (0..5).forEach { i ->
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .background(zoneColors[i] ?: Color.Gray),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (i == zonaAlvo) {
-                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = Color.White)
-                        }
-                    }
-                }
-            }
-
-            Box(
-                Modifier.fillMaxWidth().height(160.dp).background(currentZoneColor),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 36.dp),
-                    verticalAlignment = Alignment.CenterVertically
+        // Indicador de zonas
+        Row(Modifier.fillMaxWidth().height(52.dp)) {
+            (0..5).forEach { i ->
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(zoneColors[i] ?: Color.Gray),
+                    contentAlignment = Alignment.Center
                 ) {
-                    PulsatingHeart()
-                    Spacer(Modifier.width(28.dp))
-                    Text(
-                        text = "${hr ?: "--"}",
-                        fontSize = 68.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "bpm",
-                        fontSize = 24.sp,
-                        color = Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(top = 18.dp)
-                    )
+                    if (i == selectedZone) {
+                        Icon(Icons.Default.MyLocation, contentDescription = null, tint = Color.White)
+                    }
                 }
             }
         }
 
+        // Batimentos cardíacos
+        Box(
+            Modifier.fillMaxWidth().height(160.dp).background(currentZoneColor),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 36.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                PulsatingHeart()
+                Spacer(Modifier.width(28.dp))
+                Text(
+                    text = "${hr ?: "--"}",
+                    fontSize = 68.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = "bpm",
+                    fontSize = 24.sp,
+                    color = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(top = 18.dp)
+                )
+            }
+        }
+
+        // Temperatura média + acesso à imagem térmica
         if (isCamConnected) {
             Box(
                 Modifier
@@ -313,13 +254,17 @@ fun WorkoutScreen(
                         Icons.Default.ArrowForward,
                         contentDescription = "Imagem térmica",
                         tint = if (isWsConnected && imageReceived) Color.White else Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(28.dp)
-                            .let { if (isWsConnected && imageReceived) it.clickable { showThermalPreview = true } else it }
+                        modifier = Modifier.size(28.dp).let {
+                            if (isWsConnected && imageReceived) it.clickable {
+                                showThermalPreview = true
+                            } else it
+                        }
                     )
                 }
             }
         }
 
+        // Slider do próprio usuário
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -333,7 +278,6 @@ fun WorkoutScreen(
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            // Slider do usuário principal
             Slider(
                 value = desempenhoPct.coerceIn(0f, 100f),
                 onValueChange = {},
@@ -352,130 +296,114 @@ fun WorkoutScreen(
                 )
             )
         }
-        // Espaço entre o slider do usuário e o grupo
+            // Participantes do grupo (exceto o próprio)
         if (groupId != null) {
-            Spacer(Modifier.height(16.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(2.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp, horizontal = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
-                    Spacer(Modifier.height(4.dp))
-                    Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(Modifier.height(8.dp))
+    Spacer(Modifier.height(16.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF232323)),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(Icons.Default.Diversity1, contentDescription = "Grupo", tint = Color.White, modifier = Modifier.size(25.dp))
+            Spacer(Modifier.height(4.dp))
+            Text("Grupo: $groupId", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Spacer(Modifier.height(8.dp))
 
-                    val participantesGrupo = remember { mutableStateMapOf<String, Int>() }
-                    // Atualiza participantesGrupo ao receber mensagens MQTT
-                    LaunchedEffect(Unit) {
-                        if (groupId != null && groupId != userId && mqttManager != null) {
-                            mqttManager.subscribe("/group/$groupId/data") { raw ->
-                                try {
-                                    val json = org.json.JSONObject(raw)
-                                    if (json.has("zona_alvo") && json.has("nome")) {
-                                        val uid = json.optString("user_uid", "")
-                                        val zonaAlvoOutro = json.getInt("zona_alvo")
-                                        val nomeOutro = json.getString("nome")
-                                        if (uid != userId) {
-                                            participantesGrupo[nomeOutro] = zonaAlvoOutro
-                                        }
-                                    }
-                                    // Atualiza desempenho do participante
-                                    if (json.has("rating") && json.has("nome")) {
-                                        val nomeOutro = json.getString("nome")
-                                        val rating = json.getDouble("rating").toFloat()
-                                        outrosParticipantes[nomeOutro] = rating
-                                    }
-                                } catch (_: Exception) {}
-                            }
-                        }
-                    }
-                    participantesGrupo
-                        .toSortedMap(compareBy { it.lowercase() })
-                        .forEach { (nome, zona) ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(nome, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
-                                // Slider de desempenho do participante (sempre presente)
-                                val pct = outrosParticipantes[nome] ?: 0f
-                                val corZona = zoneColors[zona] ?: Color.Gray
-                                Slider(
-                                    value = pct.coerceIn(0f, 100f),
-                                    onValueChange = {},
-                                    enabled = false,
-                                    valueRange = 0f..100f,
-                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = Color.White,
-                                        activeTrackColor = corZona,
-                                        inactiveTrackColor = corZona.copy(alpha = 0.3f),
-                                        disabledThumbColor = Color.White,
-                                        disabledActiveTrackColor = corZona,
-                                        disabledInactiveTrackColor = corZona.copy(alpha = 0.3f)
-                                    )
-                                )
-                            }
-                        }
-                }
-            }
-        }
-
-    if (showResetDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = { Text("Reiniciar Treino") },
-            text = { Text("O treino atual será perdido. Deseja continuar?") },
-            confirmButton = {
-                isRunning = false
-                MqttManager.WorkoutSessionManager.resetSession()
-                navController.navigate("countdown") {
-                    popUpTo("workout") { inclusive = true }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) { Text("Cancelar") }
-            }
-        )
-    }
-
-    if (showStopDialog) {
-        AlertDialog(
-            onDismissRequest = { showStopDialog = false },
-            title = { Text("Parar Treino") },
-            text = { Text("O treino será interrompido. Deseja continuar?") },
-            confirmButton = {
-                isRunning = false
-                realTimeViewModel.stopActivity()
-                navController.popBackStack("define_workout", inclusive = false)
-            },
-            dismissButton = {
-                TextButton(onClick = { showStopDialog = false }) { Text("Cancelar") }
-            }
-        )
-    }
-
-    if (showThermalPreview) {
-        Dialog(onDismissRequest = { showThermalPreview = false }) {
-            Surface(shape = RoundedCornerShape(16.dp)) {
-                Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Imagem Térmica", style = MaterialTheme.typography.titleMedium)
-                    ThermalCameraPreview(wsViewModel)
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = { showThermalPreview = false }) {
-                        Text("Fechar")
+            outrosParticipantes
+                .toSortedMap(compareBy { it.lowercase() })
+                .forEach { (nome, data) ->
+                    val rating = data.rating.coerceIn(0f, 100f)
+                    val zona = data.zonaAlvo
+                    val corZona = zoneColors[zona] ?: Color.Gray
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(nome, color = Color.White, fontSize = 14.sp, modifier = Modifier.width(100.dp))
+                        Slider(
+                            value = rating,
+                            onValueChange = {},
+                            enabled = false,
+                            valueRange = 0f..100f,
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color.White,
+                                activeTrackColor = corZona,
+                                inactiveTrackColor = corZona.copy(alpha = 0.3f),
+                                disabledThumbColor = Color.White,
+                                disabledActiveTrackColor = corZona,
+                                disabledInactiveTrackColor = corZona.copy(alpha = 0.3f)
+                            )
+                        )
+                        Text("${rating.toInt()}%", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
                     }
                 }
-            }
         }
     }
 }
+
+        // Diálogo: Resetar treino
+        if (showResetDialog) {
+            AlertDialog(
+                onDismissRequest = { showResetDialog = false },
+                title = { Text("Reiniciar Treino") },
+                text = { Text("O treino atual será perdido. Deseja continuar?") },
+                confirmButton = {
+                    isRunning = false
+                    MqttManager.WorkoutSessionManager.resetSession()
+                    navController.navigate("countdown") {
+                        popUpTo("workout") { inclusive = true }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+
+        // Diálogo: Parar treino
+        if (showStopDialog) {
+            AlertDialog(
+                onDismissRequest = { showStopDialog = false },
+                title = { Text("Parar Treino") },
+                text = { Text("O treino será interrompido. Deseja continuar?") },
+                confirmButton = {
+                    isRunning = false
+                    realTimeViewModel.stopActivity()
+                    navController.popBackStack("define_workout", inclusive = false)
+                },
+                dismissButton = {
+                    TextButton(onClick = { showStopDialog = false }) { Text("Cancelar") }
+                }
+            )
+        }
+
+        // Diálogo: Imagem térmica
+        if (showThermalPreview) {
+            Dialog(onDismissRequest = { showThermalPreview = false }) {
+                Surface(shape = RoundedCornerShape(16.dp)) {
+                    Column(
+                        Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Imagem Térmica", style = MaterialTheme.typography.titleMedium)
+                        ThermalCameraPreview(wsViewModel)
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = { showThermalPreview = false }) {
+                            Text("Fechar")
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
