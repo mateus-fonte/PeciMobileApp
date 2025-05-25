@@ -265,6 +265,10 @@ fun WorkoutScreen(
             }
         }
         // Temperatura websocket (média + acesso à imagem térmica)
+        
+        // Obter a temperatura média dos dados térmicos
+        val avgTempWS by wsViewModel.avgThermalFlow.collectAsState()
+    
         if (isWsConnected) {
             Box(
                 Modifier
@@ -278,7 +282,8 @@ fun WorkoutScreen(
                     Icon(Icons.Default.Thermostat, contentDescription = "Temp", tint = Color.White)
                     Spacer(Modifier.width(28.dp))
                     Text(
-                        text = avgTemp?.let { "%.1fº".format(it) } ?: "--.-º",
+                        text = avgTempWS?.let { "%.1fº".format(it) } ?: "--.-º",
+                        //text = "%.1fº".format(avgTemp),
                         fontSize = 50.sp,
                         color = Color.White
                     )

@@ -326,7 +326,7 @@ fun SetupScreen(
                     onScan = { viewModel.startPpgScan() },
                     onConnect = { viewModel.connectPpg(it) },
                     onDisconnect = { viewModel.disconnectPpg() },
-                    allowedDeviceNames = listOf("sw", "ESP32_PPG"),
+                    allowedDeviceNames = listOf("sw", "ESP32_PPG", "ppg", "watch"),
                     buttonColor = purpleButtonColor,
                     buttonIcon = { HeartEcgIcon() }
                 )
