@@ -277,9 +277,12 @@ class OpenCVUtils(private val context: Context) {
         val canvas = Canvas(resultBitmap)
         canvas.drawColor(Color.BLACK) // Fundo preto
         
+        // Rotacionar os dados térmicos 180 graus
+        val rotatedThermalData = rotateThermalData180(thermalData)
+        
         // Calcular temperatura média para FaceData virtual
-        val avgTemp = calculateAverageTemperature(thermalData)
-        Log.d(TAG, "average temperature: ${thermalData}")
+        val avgTemp = calculateAverageTemperature(rotatedThermalData)
+        Log.d(TAG, "average temperature: ${rotatedThermalData}")
         val facesList = mutableListOf<FaceData>()
         
         // Adiciona um FaceData "virtual" com a temperatura média
@@ -307,11 +310,31 @@ class OpenCVUtils(private val context: Context) {
         }
         
         // Criar e sobrepor a visualização térmica com opacidade de 100%
-        overlayThermalDataFullOpacity(resultBitmap, thermalData)
+        overlayThermalDataFullOpacity(resultBitmap, rotatedThermalData)
         
         return Pair(resultBitmap, facesList)
     }
-      /**
+
+    /**
+     * Rotaciona os dados térmicos 180 graus
+     */
+    private fun rotateThermalData180(thermalData: FloatArray): FloatArray {
+        val width = 32
+        val height = 24
+        val rotatedData = FloatArray(thermalData.size)
+        
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                val originalIndex = y * width + x
+                val rotatedIndex = (height - 1 - y) * width + (width - 1 - x)
+                rotatedData[rotatedIndex] = thermalData[originalIndex]
+            }
+        }
+        
+        return rotatedData
+    }
+    
+    /**
      * Sobrepõe os dados térmicos com 100% de opacidade
      * Usado quando não há imagem de câmera, apenas dados térmicos
      */     private fun overlayThermalDataFullOpacity(bitmap: Bitmap, thermalData: FloatArray) {

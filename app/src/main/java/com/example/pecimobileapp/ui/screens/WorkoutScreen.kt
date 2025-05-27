@@ -175,9 +175,9 @@ fun WorkoutScreen(
                     startTime = System.currentTimeMillis()
                 }) { Icon(Icons.Default.PlayArrow, contentDescription = "Play") }
 
-                IconButton(onClick = { showStopDialog = true }) {
+                /*IconButton(onClick = { showStopDialog = true }) {
                     Icon(Icons.Default.Stop, contentDescription = "Stop")
-                }
+                }*/
 
                 IconButton(onClick = { showResetDialog = true }) {
                     Icon(Icons.Default.Refresh, contentDescription = "Reset")
